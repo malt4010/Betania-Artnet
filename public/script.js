@@ -8,6 +8,83 @@ let state = {
     rgb: { r: 255, g: 255, b: 255, master: 0 }
 };
 
+// Controller lock state
+let mySocketId = null;
+let isController = false;
+let currentControllerName = null;
+
+const claimBtn = document.getElementById('btn-claim-control');
+const controllerBadge = document.getElementById('controller-status-badge');
+const deviceName = (() => {
+    // Generate/persist a friendly device name
+    let n = localStorage.getItem('artnetDeviceName');
+    if (!n) {
+        const names = ['Mac', 'iPad', 'Telefon', 'Enhed'];
+        n = names[Math.floor(Math.random() * names.length)] + ' ' + Math.floor(Math.random() * 90 + 10);
+        localStorage.setItem('artnetDeviceName', n);
+    }
+    return n;
+})();
+
+function updateControllerUI(controllerInfo) {
+    // Reset classes
+    controllerBadge.classList.remove('state-free', 'state-mine', 'state-other');
+    claimBtn.classList.remove('state-mine', 'state-other');
+
+    if (!controllerInfo) {
+        isController = false;
+        currentControllerName = null;
+        controllerBadge.textContent = 'INGEN STYRING';
+        controllerBadge.classList.add('state-free');
+        claimBtn.textContent = 'TAG STYRING';
+    } else if (controllerInfo.id === mySocketId) {
+        isController = true;
+        currentControllerName = controllerInfo.name;
+        controllerBadge.textContent = '🎛 DU STYRER';
+        controllerBadge.classList.add('state-mine');
+        claimBtn.textContent = 'FRIGIV STYRING';
+        claimBtn.classList.add('state-mine');
+    } else {
+        isController = false;
+        currentControllerName = controllerInfo.name;
+        controllerBadge.textContent = `🔒 ${controllerInfo.name.toUpperCase()}`;
+        controllerBadge.classList.add('state-other');
+        claimBtn.textContent = 'OVERTAG STYRING';
+        claimBtn.classList.add('state-other');
+    }
+    console.log('[Controller] UI updated:', controllerInfo, 'myId:', mySocketId);
+}
+
+claimBtn.addEventListener('click', () => {
+    if (isController) {
+        socket.emit('release-control');
+    } else {
+        socket.emit('claim-control', { name: deviceName });
+    }
+});
+
+socket.on('controller-changed', (controllerInfo) => {
+    updateControllerUI(controllerInfo);
+});
+
+
+function saveFrontStateLocally() {
+    localStorage.setItem('artnetFrontlysUI', JSON.stringify({
+        master: state.frontMaster,
+        dimmers: state.dimmers
+    }));
+}
+
+function saveRGBStateLocally() {
+    localStorage.setItem('artnetRgbUI', JSON.stringify({
+        master: state.rgb.master,
+        r: state.rgb.r,
+        g: state.rgb.g,
+        b: state.rgb.b,
+        store: rgbStore
+    }));
+}
+
 // UI Elements
 const statusDot = document.getElementById('status-indicator');
 const controllerToggle = document.getElementById('controller-enable');
@@ -74,6 +151,7 @@ frontMasterSlider.addEventListener('input', (e) => {
     else e.target.nextElementSibling.classList.remove('active');
     
     updateAllDimmers();
+    saveFrontStateLocally();
 });
 
 function initDimmers() {
@@ -104,6 +182,7 @@ function initDimmers() {
             valueDisplay.textContent = val;
             if (val > 0) valueDisplay.classList.add('active');
             else valueDisplay.classList.remove('active');
+            saveFrontStateLocally();
         });
 
         // Flash Button (Momentary Override to 255 - Always Instant)
@@ -139,8 +218,8 @@ function updateDimmerOutput(channel, customFade = null) {
     const masterScale = state.frontMaster / 255;
     const finalVal = Math.round(rawVal * masterScale);
     
-    // Use custom fade (for Flash) or Global Fade
-    const fadeTime = customFade !== null ? customFade : (parseInt(masterFadeInput.value) || 0);
+    // Use custom fade (for Flash) or Global Fade in seconds
+    const fadeTime = customFade !== null ? customFade : ((parseFloat(masterFadeInput.value) || 0) * 1000);
     
     socket.emit('update-channel', { channel, value: finalVal, fadeTime });
 }
@@ -209,6 +288,7 @@ colorPicker.on('color:change', (color) => {
     
     syncManualSliders();
     updateRGBGroup();
+    saveRGBStateLocally();
 });
 
 const rgbMaster = document.getElementById('rgb-master-dimmer');
@@ -222,6 +302,7 @@ btnRgbFullOn.addEventListener('click', () => {
     rgbMaster.nextElementSibling.textContent = '255';
     rgbMaster.nextElementSibling.classList.add('active');
     updateRGBGroup();
+    saveRGBStateLocally();
 });
 
 btnRgbBlackout.addEventListener('click', () => {
@@ -230,6 +311,7 @@ btnRgbBlackout.addEventListener('click', () => {
     rgbMaster.nextElementSibling.textContent = '0';
     rgbMaster.nextElementSibling.classList.remove('active');
     updateRGBGroup();
+    saveRGBStateLocally();
 });
 
 function syncManualSliders() {
@@ -261,20 +343,21 @@ function syncManualSliders() {
             isInternalUpdate = true;
             colorPicker.color.set({ r: state.rgb.r, g: state.rgb.g, b: state.rgb.b });
             setTimeout(() => { isInternalUpdate = false; }, 50);
-        } else {
-            slider.nextElementSibling.textContent = slider.value;
-            if(slider.value > 0) slider.nextElementSibling.classList.add('active');
-            else slider.nextElementSibling.classList.remove('active');
         }
         
+        slider.nextElementSibling.textContent = slider.value;
+        if(parseInt(slider.value) > 0) slider.nextElementSibling.classList.add('active');
+        else slider.nextElementSibling.classList.remove('active');
+        
         updateRGBGroup();
+        saveRGBStateLocally();
     });
 });
 
 function updateRGBGroup() {
     let fadeTime = 0;
     const fadeInput = document.getElementById('master-fade-time');
-    if (fadeInput) fadeTime = parseInt(fadeInput.value) || 0;
+    if (fadeInput) fadeTime = (parseFloat(fadeInput.value) || 0) * 1000;
 
     // 38 fixtures starting at 50 (8 channel offset)
     for (let i = 0; i < 38; i++) {
@@ -350,51 +433,155 @@ socket.on('init', (data) => {
     if(data.targetDmx) {
         
         // --- Restore Frontlys --- //
-        // For simplicity, we assume Master is at 255 so the individual dimmers can accurately reflect the DMX array.
-        state.frontMaster = 255;
-        frontMasterSlider.value = 255;
-        frontMasterSlider.nextElementSibling.textContent = '255';
-        frontMasterSlider.nextElementSibling.classList.add('active');
+        const localStr = localStorage.getItem('artnetFrontlysUI');
+        let localState = null;
+        if (localStr) {
+            try { localState = JSON.parse(localStr); } catch(e) {}
+        }
         
-        for (let ch = 19; ch <= 28; ch++) {
-            const serverVal = data.targetDmx[ch - 1] || 0;
-            state.dimmers[ch].value = serverVal;
-            const faderDOM = document.getElementById(`fader-${ch}`);
-            const dispDOM = document.getElementById(`val-${ch}`);
+        if (localState && localState.master !== undefined && localState.dimmers) {
+            state.frontMaster = localState.master;
+            frontMasterSlider.value = localState.master;
+            frontMasterSlider.nextElementSibling.textContent = localState.master;
+            if (localState.master > 0) frontMasterSlider.nextElementSibling.classList.add('active');
+            else frontMasterSlider.nextElementSibling.classList.remove('active');
             
-            if(faderDOM) faderDOM.value = serverVal;
-            if(dispDOM) {
-                dispDOM.textContent = serverVal;
-                if(serverVal > 0) dispDOM.classList.add('active');
-                else dispDOM.classList.remove('active');
+            for (let ch = 19; ch <= 28; ch++) {
+                if (localState.dimmers[ch]) {
+                    const savedVal = localState.dimmers[ch].value;
+                    state.dimmers[ch].value = savedVal;
+                    const faderDOM = document.getElementById(`fader-${ch}`);
+                    const dispDOM = document.getElementById(`val-${ch}`);
+                    if (faderDOM) faderDOM.value = savedVal;
+                    if (dispDOM) {
+                        dispDOM.textContent = savedVal;
+                        if (savedVal > 0) dispDOM.classList.add('active');
+                        else dispDOM.classList.remove('active');
+                    }
+                }
+            }
+        } else {
+            // Fallback: Assume Master is 255
+            state.frontMaster = 255;
+            frontMasterSlider.value = 255;
+            frontMasterSlider.nextElementSibling.textContent = '255';
+            frontMasterSlider.nextElementSibling.classList.add('active');
+            
+            for (let ch = 19; ch <= 28; ch++) {
+                const serverVal = data.targetDmx[ch - 1] || 0;
+                state.dimmers[ch].value = serverVal;
+                const faderDOM = document.getElementById(`fader-${ch}`);
+                const dispDOM = document.getElementById(`val-${ch}`);
+                
+                if(faderDOM) faderDOM.value = serverVal;
+                if(dispDOM) {
+                    dispDOM.textContent = serverVal;
+                    if(serverVal > 0) dispDOM.classList.add('active');
+                    else dispDOM.classList.remove('active');
+                }
             }
         }
         
         // --- Restore RGB Group --- //
-        // Fixture starts at channel 50, so Master is index 49
-        const serverRgbMaster = data.targetDmx[49] || 0;
-        const serverR = data.targetDmx[50] || 255;
-        const serverG = data.targetDmx[51] || 255;
-        const serverB = data.targetDmx[52] || 255;
+        const localRgbStr = localStorage.getItem('artnetRgbUI');
+        let localRgb = null;
+        if (localRgbStr) {
+            try { localRgb = JSON.parse(localRgbStr); } catch(e) {}
+        }
+        
+        let serverRgbMaster = data.targetDmx[49] || 0;
+        let setR = 255, setG = 255, setB = 255;
+        
+        if (localRgb && localRgb.master !== undefined) {
+            serverRgbMaster = localRgb.master;
+            setR = localRgb.r;
+            setG = localRgb.g;
+            setB = localRgb.b;
+            if (localRgb.store) {
+                rgbStore['ALL'] = localRgb.store['ALL'] || {r:setR, g:setG, b:setB};
+                rgbStore['ODD'] = localRgb.store['ODD'] || {r:setR, g:setG, b:setB};
+                rgbStore['EVEN'] = localRgb.store['EVEN'] || {r:setR, g:setG, b:setB};
+            }
+        } else {
+            const scaledR = data.targetDmx[50] || 255;
+            const scaledG = data.targetDmx[51] || 255;
+            const scaledB = data.targetDmx[52] || 255;
+            setR = scaledR; setG = scaledG; setB = scaledB;
+            rgbStore['ALL'] = { r: setR, g: setG, b: setB };
+            rgbStore['ODD'] = { r: setR, g: setG, b: setB };
+            rgbStore['EVEN'] = { r: setR, g: setG, b: setB };
+        }
         
         state.rgb.master = serverRgbMaster;
-        state.rgb.r = serverR;
-        state.rgb.g = serverG;
-        state.rgb.b = serverB;
-        
-        // Sync the ODD/EVEN memory to current server state to prevent "jumping" when switching after reload
-        rgbStore['ALL'] = { r: serverR, g: serverG, b: serverB };
-        rgbStore['ODD'] = { r: serverR, g: serverG, b: serverB };
-        rgbStore['EVEN'] = { r: serverR, g: serverG, b: serverB };
+        state.rgb.r = setR;
+        state.rgb.g = setG;
+        state.rgb.b = setB;
         
         rgbMaster.value = serverRgbMaster;
         rgbMaster.nextElementSibling.textContent = serverRgbMaster;
         if(serverRgbMaster > 0) rgbMaster.nextElementSibling.classList.add('active');
         else rgbMaster.nextElementSibling.classList.remove('active');
         
+        // Grab our own socket ID and restore controller status
+        mySocketId = data.myId;
+        updateControllerUI(data.controller);
+        
         syncManualSliders();
-        colorPicker.color.set({ r: serverR, g: serverG, b: serverB });
+        colorPicker.color.set({ r: setR, g: setG, b: setB });
         setTimeout(() => { isAppInit = false; }, 300);
+    }
+});
+
+// Real-time sync from other devices
+socket.on('channel-updated', ({ channel, value }) => {
+    // Frontlys channels 19-28
+    if (channel >= 19 && channel <= 28) {
+        // We don't know their master decomposition so just update state as raw
+        state.dimmers[channel] = state.dimmers[channel] || { value: 0 };
+        // Update the visual fader silently
+        const faderDOM = document.getElementById(`fader-${channel}`);
+        const dispDOM = document.getElementById(`val-${channel}`);
+        if (faderDOM) faderDOM.value = value;
+        if (dispDOM) {
+            dispDOM.textContent = value;
+            if (value > 0) dispDOM.classList.add('active');
+            else dispDOM.classList.remove('active');
+        }
+        return;
+    }
+    
+    // RGB channels: each fixture starts at ch 50, offset 8
+    // Check if it's a master or RGB channel of any fixture
+    const relCh = channel - 50;
+    if (relCh >= 0 && relCh < 38 * 8) {
+        const fixtureOffset = relCh % 8;
+        
+        if (fixtureOffset === 0) {
+            // Master dimmer for this fixture — update RGB master slider if it's the first fixture
+            if (relCh === 0) {
+                state.rgb.master = value;
+                rgbMaster.value = value;
+                rgbMaster.nextElementSibling.textContent = value;
+                if (value > 0) rgbMaster.nextElementSibling.classList.add('active');
+                else rgbMaster.nextElementSibling.classList.remove('active');
+            }
+        } else if (fixtureOffset === 1) {
+            state.rgb.r = value;
+        } else if (fixtureOffset === 2) {
+            state.rgb.g = value;
+        } else if (fixtureOffset === 3) {
+            state.rgb.b = value;
+        }
+        
+        // After updating r/g/b, refresh the manual sliders and colorpicker (debounced)
+        if (fixtureOffset >= 1 && fixtureOffset <= 3) {
+            if (relCh < 8) { // Only update UI from first fixture to avoid spam
+                syncManualSliders();
+                isInternalUpdate = true;
+                colorPicker.color.set({ r: state.rgb.r, g: state.rgb.g, b: state.rgb.b });
+                setTimeout(() => { isInternalUpdate = false; }, 50);
+            }
+        }
     }
 });
 
@@ -442,6 +629,7 @@ function allDimmersOff() {
         valDisp.textContent = '0';
         valDisp.classList.remove('active');
     }
+    saveFrontStateLocally();
 }
 
 function allDimmersFull() {
@@ -454,6 +642,7 @@ function allDimmersFull() {
         valDisp.textContent = '255';
         valDisp.classList.add('active');
     }
+    saveFrontStateLocally();
 }
 
 // Init
@@ -470,3 +659,147 @@ if (globalFadeInput) {
         localStorage.setItem('artnetFadeTime', globalFadeInput.value);
     });
 }
+
+// ============================================================
+// EFFECTS ENGINE
+// ============================================================
+
+function hslToRgb(h, s, l) {
+    h /= 360; s /= 100; l /= 100;
+    let r, g, b;
+    if (s === 0) { r = g = b = l; }
+    else {
+        const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+        const p = 2 * l - q;
+        const hue2rgb = (p, q, t) => {
+            if (t < 0) t += 1; if (t > 1) t -= 1;
+            if (t < 1/6) return p + (q - p) * 6 * t;
+            if (t < 1/2) return q;
+            if (t < 2/3) return p + (q - p) * (2/3 - t) * 6;
+            return p;
+        };
+        r = hue2rgb(p, q, h + 1/3);
+        g = hue2rgb(p, q, h);
+        b = hue2rgb(p, q, h - 1/3);
+    }
+    return { r: Math.round(r * 255), g: Math.round(g * 255), b: Math.round(b * 255) };
+}
+
+// --- RAINBOW ---
+let rainbowInterval = null;
+let rainbowOffset = 0;
+let rainbowSnapshot = null; // State saved before effect starts
+const btnRainbow = document.getElementById('btn-rainbow');
+const cardRainbow = document.getElementById('card-rainbow');
+const rainbowSpeedSlider = document.getElementById('rainbow-speed');
+
+function stopRainbow(restoreState = true) {
+    clearInterval(rainbowInterval);
+    rainbowInterval = null;
+    btnRainbow.textContent = 'START';
+    btnRainbow.classList.remove('running');
+    cardRainbow.classList.remove('active');
+
+    // Restore the color all fixtures had before rainbow started
+    if (restoreState && rainbowSnapshot) {
+        const { r, g, b, master } = rainbowSnapshot;
+        const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
+        for (let i = 0; i < 38; i++) {
+            const startCh = 50 + (i * 8);
+            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
+        }
+        // Restore UI
+        setRGB(r, g, b, false);
+        rainbowSnapshot = null;
+    }
+}
+
+function startRainbow() {
+    stopOddEven(false); // Stop conflicting effect without restoring (we're taking over)
+    // Snapshot current state
+    rainbowSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
+
+    rainbowInterval = setInterval(() => {
+        const speed = parseInt(rainbowSpeedSlider.value);
+        rainbowOffset = (rainbowOffset + speed) % 360;
+        for (let i = 0; i < 38; i++) {
+            const hue = (rainbowOffset + (i * (360 / 38))) % 360;
+            const rgb = hslToRgb(hue, 100, 50);
+            const startCh = 50 + (i * 8);
+            socket.emit('update-channel', { channel: startCh,     value: state.rgb.master, fadeTime: 0 });
+            socket.emit('update-channel', { channel: startCh + 1, value: rgb.r, fadeTime: 0 });
+            socket.emit('update-channel', { channel: startCh + 2, value: rgb.g, fadeTime: 0 });
+            socket.emit('update-channel', { channel: startCh + 3, value: rgb.b, fadeTime: 0 });
+        }
+    }, 80);
+    btnRainbow.textContent = 'STOP';
+    btnRainbow.classList.add('running');
+    cardRainbow.classList.add('active');
+}
+
+btnRainbow.addEventListener('click', () => {
+    if (rainbowInterval) stopRainbow();
+    else startRainbow();
+});
+
+// --- ODD/EVEN DIMFLASH ---
+let oddEvenInterval = null;
+let oddEvenPhase = false;
+let oddEvenSnapshot = null; // master dimmer value saved before effect
+const btnOddEven = document.getElementById('btn-oddeven');
+const cardOddEven = document.getElementById('card-oddeven');
+const bpmSlider = document.getElementById('oddeven-bpm');
+const bpmValDisplay = document.getElementById('oddeven-bpm-val');
+
+bpmSlider.addEventListener('input', () => {
+    bpmValDisplay.textContent = bpmSlider.value;
+    if (oddEvenInterval) { stopOddEven(false); startOddEven(); } // Restart with new BPM, keep snapshot
+});
+
+function stopOddEven(restoreState = true) {
+    clearInterval(oddEvenInterval);
+    oddEvenInterval = null;
+    btnOddEven.textContent = 'START';
+    btnOddEven.classList.remove('running');
+    cardOddEven.classList.remove('active');
+
+    // Restore all fixtures to their pre-effect master value
+    if (restoreState && oddEvenSnapshot !== null) {
+        const master = oddEvenSnapshot;
+        const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
+        for (let i = 0; i < 38; i++) {
+            const startCh = 50 + (i * 8);
+            socket.emit('update-channel', { channel: startCh, value: master, fadeTime });
+        }
+        oddEvenSnapshot = null;
+    }
+}
+
+function startOddEven() {
+    stopRainbow(false); // Stop conflicting effect without restoring
+    // Snapshot current master
+    oddEvenSnapshot = state.rgb.master;
+
+    const bpm = parseInt(bpmSlider.value);
+    const intervalMs = (60 / bpm) * 1000;
+    oddEvenInterval = setInterval(() => {
+        oddEvenPhase = !oddEvenPhase;
+        for (let i = 0; i < 38; i++) {
+            const isOdd = (i % 2 === 0);
+            const dimVal = (isOdd !== oddEvenPhase) ? state.rgb.master : 0;
+            const startCh = 50 + (i * 8);
+            socket.emit('update-channel', { channel: startCh, value: dimVal, fadeTime: 0 });
+        }
+    }, intervalMs);
+    btnOddEven.textContent = 'STOP';
+    btnOddEven.classList.add('running');
+    cardOddEven.classList.add('active');
+}
+
+btnOddEven.addEventListener('click', () => {
+    if (oddEvenInterval) stopOddEven();
+    else startOddEven();
+});
