@@ -164,6 +164,10 @@ io.on('connection', (socket) => {
         io.emit('config-changed', config);
     });
 
+    socket.on('ui-sync', (data) => {
+        socket.broadcast.emit('ui-sync', data);
+    });
+
     socket.on('all-off', () => {
         targetDmx.fill(0);
         fadeSpeeds.fill(0);

@@ -93,6 +93,7 @@ frontMasterSlider.addEventListener('input', (e) => {
     
     updateAllDimmers();
     saveFrontStateLocally();
+    socket.emit('ui-sync', { type: 'frontMaster', value: state.frontMaster });
 });
 
 function initDimmers() {
@@ -474,9 +475,7 @@ socket.on('init', (data) => {
 socket.on('channel-updated', ({ channel, value }) => {
     // Frontlys channels 19-28
     if (channel >= 19 && channel <= 28) {
-        // We don't know their master decomposition so just update state as raw
         state.dimmers[channel] = state.dimmers[channel] || { value: 0 };
-        // Update the visual fader silently
         const faderDOM = document.getElementById(`fader-${channel}`);
         const dispDOM = document.getElementById(`val-${channel}`);
         if (faderDOM) faderDOM.value = value;
@@ -488,37 +487,45 @@ socket.on('channel-updated', ({ channel, value }) => {
         return;
     }
     
-    // RGB channels: each fixture starts at ch 50, offset 8
-    // Check if it's a master or RGB channel of any fixture
     const relCh = channel - 50;
     if (relCh >= 0 && relCh < 38 * 8) {
         const fixtureOffset = relCh % 8;
+        if (fixtureOffset === 0 && relCh === 0) {
+            state.rgb.master = value;
+            rgbMaster.value = value;
+            rgbMaster.nextElementSibling.textContent = value;
+            if (value > 0) rgbMaster.nextElementSibling.classList.add('active');
+            else rgbMaster.nextElementSibling.classList.remove('active');
+        } else if (fixtureOffset === 1) state.rgb.r = value;
+        else if (fixtureOffset === 2) state.rgb.g = value;
+        else if (fixtureOffset === 3) state.rgb.b = value;
         
-        if (fixtureOffset === 0) {
-            // Master dimmer for this fixture — update RGB master slider if it's the first fixture
-            if (relCh === 0) {
-                state.rgb.master = value;
-                rgbMaster.value = value;
-                rgbMaster.nextElementSibling.textContent = value;
-                if (value > 0) rgbMaster.nextElementSibling.classList.add('active');
-                else rgbMaster.nextElementSibling.classList.remove('active');
-            }
-        } else if (fixtureOffset === 1) {
-            state.rgb.r = value;
-        } else if (fixtureOffset === 2) {
-            state.rgb.g = value;
-        } else if (fixtureOffset === 3) {
-            state.rgb.b = value;
+        if (fixtureOffset >= 1 && fixtureOffset <= 3 && relCh < 8) {
+            syncManualSliders();
+            isInternalUpdate = true;
+            colorPicker.color.set({ r: state.rgb.r, g: state.rgb.g, b: state.rgb.b });
+            setTimeout(() => { isInternalUpdate = false; }, 50);
         }
-        
-        // After updating r/g/b, refresh the manual sliders and colorpicker (debounced)
-        if (fixtureOffset >= 1 && fixtureOffset <= 3) {
-            if (relCh < 8) { // Only update UI from first fixture to avoid spam
-                syncManualSliders();
-                isInternalUpdate = true;
-                colorPicker.color.set({ r: state.rgb.r, g: state.rgb.g, b: state.rgb.b });
-                setTimeout(() => { isInternalUpdate = false; }, 50);
-            }
+    }
+});
+
+socket.on('ui-sync', (data) => {
+    if (data.type === 'frontMaster') {
+        state.frontMaster = data.value;
+        frontMasterSlider.value = data.value;
+        frontMasterSlider.nextElementSibling.textContent = data.value;
+        if (data.value > 0) frontMasterSlider.nextElementSibling.classList.add('active');
+        else frontMasterSlider.nextElementSibling.classList.remove('active');
+    } else if (data.type === 'fadeTime') {
+        masterFadeInput.value = data.value;
+        localStorage.setItem('artnetFadeTime', data.value);
+    } else if (data.type === 'effect') {
+        if (data.effect === 'rainbow') {
+            if (data.state === 'start') startRainbow(false); // second param false means don't broadcast back
+            else stopRainbow(false, false); // second param false means don't restore state locally (to avoid double restore conflicts)
+        } else if (data.effect === 'oddeven') {
+            if (data.state === 'start') startOddEven(false);
+            else stopOddEven(false, false);
         }
     }
 });
@@ -595,6 +602,7 @@ if (globalFadeInput) {
     
     globalFadeInput.addEventListener('change', () => {
         localStorage.setItem('artnetFadeTime', globalFadeInput.value);
+        socket.emit('ui-sync', { type: 'fadeTime', value: globalFadeInput.value });
     });
 }
 
@@ -631,12 +639,16 @@ const btnRainbow = document.getElementById('btn-rainbow');
 const cardRainbow = document.getElementById('card-rainbow');
 const rainbowSpeedSlider = document.getElementById('rainbow-speed');
 
-function stopRainbow(restoreState = true) {
+function stopRainbow(broadcast = true, restoreState = true) {
     clearInterval(rainbowInterval);
     rainbowInterval = null;
     btnRainbow.textContent = 'START';
     btnRainbow.classList.remove('running');
     cardRainbow.classList.remove('active');
+
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'rainbow', state: 'stop' });
+    }
 
     // Restore the color all fixtures had before rainbow started
     if (restoreState && rainbowSnapshot) {
@@ -649,37 +661,41 @@ function stopRainbow(restoreState = true) {
             socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
             socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
         }
-        // Restore UI
         setRGB(r, g, b, false);
         rainbowSnapshot = null;
     }
 }
 
-function startRainbow() {
-    stopOddEven(false); // Stop conflicting effect without restoring (we're taking over)
-    // Snapshot current state
-    rainbowSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
+function startRainbow(broadcast = true) {
+    stopOddEven(false); // Stop conflicting effect without restoring
+    
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'rainbow', state: 'start' });
+        // Snapshot current state locally to restore later
+        rainbowSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
 
-    rainbowInterval = setInterval(() => {
-        const speed = parseInt(rainbowSpeedSlider.value);
-        rainbowOffset = (rainbowOffset + speed) % 360;
-        for (let i = 0; i < 38; i++) {
-            const hue = (rainbowOffset + (i * (360 / 38))) % 360;
-            const rgb = hslToRgb(hue, 100, 50);
-            const startCh = 50 + (i * 8);
-            socket.emit('update-channel', { channel: startCh,     value: state.rgb.master, fadeTime: 0 });
-            socket.emit('update-channel', { channel: startCh + 1, value: rgb.r, fadeTime: 0 });
-            socket.emit('update-channel', { channel: startCh + 2, value: rgb.g, fadeTime: 0 });
-            socket.emit('update-channel', { channel: startCh + 3, value: rgb.b, fadeTime: 0 });
-        }
-    }, 80);
+        rainbowInterval = setInterval(() => {
+            const speed = parseInt(rainbowSpeedSlider.value);
+            rainbowOffset = (rainbowOffset + speed) % 360;
+            for (let i = 0; i < 38; i++) {
+                const hue = (rainbowOffset + (i * (360 / 38))) % 360;
+                const rgb = hslToRgb(hue, 100, 50);
+                const startCh = 50 + (i * 8);
+                socket.emit('update-channel', { channel: startCh,     value: state.rgb.master, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 1, value: rgb.r, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 2, value: rgb.g, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 3, value: rgb.b, fadeTime: 0 });
+            }
+        }, 80);
+    }
+    
     btnRainbow.textContent = 'STOP';
     btnRainbow.classList.add('running');
     cardRainbow.classList.add('active');
 }
 
 btnRainbow.addEventListener('click', () => {
-    if (rainbowInterval) stopRainbow();
+    if (rainbowInterval || btnRainbow.classList.contains('running')) stopRainbow();
     else startRainbow();
 });
 
@@ -697,12 +713,16 @@ bpmSlider.addEventListener('input', () => {
     if (oddEvenInterval) { stopOddEven(false); startOddEven(); } // Restart with new BPM, keep snapshot
 });
 
-function stopOddEven(restoreState = true) {
+function stopOddEven(broadcast = true, restoreState = true) {
     clearInterval(oddEvenInterval);
     oddEvenInterval = null;
     btnOddEven.textContent = 'START';
     btnOddEven.classList.remove('running');
     cardOddEven.classList.remove('active');
+
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'stop' });
+    }
 
     // Restore all fixtures to their pre-effect master value
     if (restoreState && oddEvenSnapshot !== null) {
@@ -716,28 +736,33 @@ function stopOddEven(restoreState = true) {
     }
 }
 
-function startOddEven() {
+function startOddEven(broadcast = true) {
     stopRainbow(false); // Stop conflicting effect without restoring
-    // Snapshot current master
-    oddEvenSnapshot = state.rgb.master;
+    
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'start' });
+        // Snapshot current master
+        oddEvenSnapshot = state.rgb.master;
 
-    const bpm = parseInt(bpmSlider.value);
-    const intervalMs = (60 / bpm) * 1000;
-    oddEvenInterval = setInterval(() => {
-        oddEvenPhase = !oddEvenPhase;
-        for (let i = 0; i < 38; i++) {
-            const isOdd = (i % 2 === 0);
-            const dimVal = (isOdd !== oddEvenPhase) ? state.rgb.master : 0;
-            const startCh = 50 + (i * 8);
-            socket.emit('update-channel', { channel: startCh, value: dimVal, fadeTime: 0 });
-        }
-    }, intervalMs);
+        const bpm = parseInt(bpmSlider.value);
+        const intervalMs = (60 / bpm) * 1000;
+        oddEvenInterval = setInterval(() => {
+            oddEvenPhase = !oddEvenPhase;
+            for (let i = 0; i < 38; i++) {
+                const isOdd = (i % 2 === 0);
+                const dimVal = (isOdd !== oddEvenPhase) ? state.rgb.master : 0;
+                const startCh = 50 + (i * 8);
+                socket.emit('update-channel', { channel: startCh, value: dimVal, fadeTime: 0 });
+            }
+        }, intervalMs);
+    }
+    
     btnOddEven.textContent = 'STOP';
     btnOddEven.classList.add('running');
     cardOddEven.classList.add('active');
 }
 
 btnOddEven.addEventListener('click', () => {
-    if (oddEvenInterval) stopOddEven();
+    if (oddEvenInterval || btnOddEven.classList.contains('running')) stopOddEven();
     else startOddEven();
 });
