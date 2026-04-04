@@ -519,10 +519,16 @@ socket.on('ui-sync', (data) => {
     } else if (data.type === 'fadeTime') {
         masterFadeInput.value = data.value;
         localStorage.setItem('artnetFadeTime', data.value);
+    } else if (data.type === 'rainbowSpeed') {
+        rainbowSpeedSlider.value = data.value;
+    } else if (data.type === 'bpm') {
+        bpmSlider.value = data.value;
+        bpmValDisplay.textContent = data.value;
+        if (oddEvenInterval) { stopOddEven(false, false); startOddEven(false); }
     } else if (data.type === 'effect') {
         if (data.effect === 'rainbow') {
-            if (data.state === 'start') startRainbow(false); // second param false means don't broadcast back
-            else stopRainbow(false, false); // second param false means don't restore state locally (to avoid double restore conflicts)
+            if (data.state === 'start') startRainbow(false);
+            else stopRainbow(false, false);
         } else if (data.effect === 'oddeven') {
             if (data.state === 'start') startOddEven(false);
             else stopOddEven(false, false);
@@ -693,10 +699,13 @@ function startRainbow(broadcast = true) {
     btnRainbow.classList.add('running');
     cardRainbow.classList.add('active');
 }
-
 btnRainbow.addEventListener('click', () => {
     if (rainbowInterval || btnRainbow.classList.contains('running')) stopRainbow();
     else startRainbow();
+});
+
+rainbowSpeedSlider.addEventListener('input', () => {
+    socket.emit('ui-sync', { type: 'rainbowSpeed', value: rainbowSpeedSlider.value });
 });
 
 // --- ODD/EVEN DIMFLASH ---
@@ -710,7 +719,8 @@ const bpmValDisplay = document.getElementById('oddeven-bpm-val');
 
 bpmSlider.addEventListener('input', () => {
     bpmValDisplay.textContent = bpmSlider.value;
-    if (oddEvenInterval) { stopOddEven(false); startOddEven(); } // Restart with new BPM, keep snapshot
+    if (oddEvenInterval) { stopOddEven(false); startOddEven(); } // Local start emits its own ui-sync anyway so this is fine
+    socket.emit('ui-sync', { type: 'bpm', value: bpmSlider.value });
 });
 
 function stopOddEven(broadcast = true, restoreState = true) {
