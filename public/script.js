@@ -8,65 +8,6 @@ let state = {
     rgb: { r: 255, g: 255, b: 255, master: 0 }
 };
 
-// Controller lock state
-let mySocketId = null;
-let isController = false;
-let currentControllerName = null;
-
-const claimBtn = document.getElementById('btn-claim-control');
-const controllerBadge = document.getElementById('controller-status-badge');
-const deviceName = (() => {
-    // Generate/persist a friendly device name
-    let n = localStorage.getItem('artnetDeviceName');
-    if (!n) {
-        const names = ['Mac', 'iPad', 'Telefon', 'Enhed'];
-        n = names[Math.floor(Math.random() * names.length)] + ' ' + Math.floor(Math.random() * 90 + 10);
-        localStorage.setItem('artnetDeviceName', n);
-    }
-    return n;
-})();
-
-function updateControllerUI(controllerInfo) {
-    // Reset classes
-    controllerBadge.classList.remove('state-free', 'state-mine', 'state-other');
-    claimBtn.classList.remove('state-mine', 'state-other');
-
-    if (!controllerInfo) {
-        isController = false;
-        currentControllerName = null;
-        controllerBadge.textContent = 'INGEN STYRING';
-        controllerBadge.classList.add('state-free');
-        claimBtn.textContent = 'TAG STYRING';
-    } else if (controllerInfo.id === mySocketId) {
-        isController = true;
-        currentControllerName = controllerInfo.name;
-        controllerBadge.textContent = '🎛 DU STYRER';
-        controllerBadge.classList.add('state-mine');
-        claimBtn.textContent = 'FRIGIV STYRING';
-        claimBtn.classList.add('state-mine');
-    } else {
-        isController = false;
-        currentControllerName = controllerInfo.name;
-        controllerBadge.textContent = `🔒 ${controllerInfo.name.toUpperCase()}`;
-        controllerBadge.classList.add('state-other');
-        claimBtn.textContent = 'OVERTAG STYRING';
-        claimBtn.classList.add('state-other');
-    }
-    console.log('[Controller] UI updated:', controllerInfo, 'myId:', mySocketId);
-}
-
-claimBtn.addEventListener('click', () => {
-    if (isController) {
-        socket.emit('release-control');
-    } else {
-        socket.emit('claim-control', { name: deviceName });
-    }
-});
-
-socket.on('controller-changed', (controllerInfo) => {
-    updateControllerUI(controllerInfo);
-});
-
 
 function saveFrontStateLocally() {
     localStorage.setItem('artnetFrontlysUI', JSON.stringify({
@@ -522,10 +463,7 @@ socket.on('init', (data) => {
         if(serverRgbMaster > 0) rgbMaster.nextElementSibling.classList.add('active');
         else rgbMaster.nextElementSibling.classList.remove('active');
         
-        // Grab our own socket ID and restore controller status
-        mySocketId = data.myId;
-        updateControllerUI(data.controller);
-        
+        // Restore RGB UI
         syncManualSliders();
         colorPicker.color.set({ r: setR, g: setG, b: setB });
         setTimeout(() => { isAppInit = false; }, 300);

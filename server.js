@@ -29,9 +29,6 @@ let lastActiveTime = Date.now();
 const ACTIVE_THRESHOLD = 2000;
 let sequence = 1; // Art-Net sequence counter
 
-// Controller Lock System
-let activeController = null; // socket.id of whoever has control
-let controllerName = null;   // display name
 
 // UDP Socket
 const udpClient = dgram.createSocket('udp4');
@@ -127,33 +124,10 @@ io.on('connection', (socket) => {
     socket.emit('init', {
         config,
         currentDmx: Array.from(currentDmx),
-        targetDmx: Array.from(targetDmx),
-        controller: activeController ? { id: activeController, name: controllerName } : null,
-        myId: socket.id
-    });
-
-    // Claim exclusive control of the DMX board
-    socket.on('claim-control', ({ name }) => {
-        activeController = socket.id;
-        controllerName = name || 'Ukendt enhed';
-        console.log(`[Control] ${controllerName} tager styringen (${socket.id})`);
-        io.emit('controller-changed', { id: activeController, name: controllerName });
-    });
-
-    // Release control voluntarily
-    socket.on('release-control', () => {
-        if (activeController === socket.id) {
-            console.log(`[Control] ${controllerName} frigiver styringen`);
-            activeController = null;
-            controllerName = null;
-            io.emit('controller-changed', null);
-        }
+        targetDmx: Array.from(targetDmx)
     });
 
     socket.on('update-channel', ({ channel, value, fadeTime }) => {
-        // Block updates from non-controller clients when a controller is active
-        if (activeController && activeController !== socket.id) return;
-
         const index = channel - 1;
         if (index < 0 || index >= 512) return;
 
@@ -191,19 +165,12 @@ io.on('connection', (socket) => {
     });
 
     socket.on('all-off', () => {
-        if (activeController && activeController !== socket.id) return;
         targetDmx.fill(0);
         fadeSpeeds.fill(0);
         lastActiveTime = Date.now();
     });
 
     socket.on('disconnect', () => {
-        if (activeController === socket.id) {
-            console.log(`[Control] Controller ${controllerName} afbrød forbindelsen – styringen frigivet.`);
-            activeController = null;
-            controllerName = null;
-            io.emit('controller-changed', null);
-        }
         console.log('Client disconnected');
     });
 });
