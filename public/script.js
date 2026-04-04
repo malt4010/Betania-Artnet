@@ -735,13 +735,16 @@ function stopOddEven(broadcast = true, restoreState = true) {
         socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'stop' });
     }
 
-    // Restore all fixtures to their pre-effect master value
+    // Restore all fixtures to their pre-effect state (Master and Color)
     if (restoreState && oddEvenSnapshot !== null) {
-        const master = oddEvenSnapshot;
+        const { r, g, b, master } = oddEvenSnapshot;
         const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
         for (let i = 0; i < TOTAL_FIXTURES; i++) {
             const startCh = 50 + (i * 8);
-            socket.emit('update-channel', { channel: startCh, value: master, fadeTime });
+            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
         }
         oddEvenSnapshot = null;
     }
@@ -752,8 +755,8 @@ function startOddEven(broadcast = true) {
     
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'start' });
-        // Snapshot current master
-        oddEvenSnapshot = state.rgb.master;
+        // Snapshot current color and master
+        oddEvenSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
 
         const bpm = parseInt(bpmSlider.value);
         const intervalMs = (60 / bpm) * 1000;
@@ -763,7 +766,11 @@ function startOddEven(broadcast = true) {
                 const isOdd = (i % 2 === 0);
                 const dimVal = (isOdd !== oddEvenPhase) ? state.rgb.master : 0;
                 const startCh = 50 + (i * 8);
-                socket.emit('update-channel', { channel: startCh, value: dimVal, fadeTime: 0 });
+                // Send both dimmer AND color to be safe
+                socket.emit('update-channel', { channel: startCh,     value: dimVal, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 1, value: state.rgb.r, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 2, value: state.rgb.g, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 3, value: state.rgb.b, fadeTime: 0 });
             }
         }, intervalMs);
     }
