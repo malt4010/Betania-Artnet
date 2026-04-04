@@ -8,6 +8,7 @@ let state = {
     rgb: { r: 255, g: 255, b: 255, master: 0 }
 };
 
+const TOTAL_FIXTURES = 39;
 
 function saveFrontStateLocally() {
     localStorage.setItem('artnetFrontlysUI', JSON.stringify({
@@ -301,8 +302,8 @@ function updateRGBGroup() {
     const fadeInput = document.getElementById('master-fade-time');
     if (fadeInput) fadeTime = (parseFloat(fadeInput.value) || 0) * 1000;
 
-    // 38 fixtures starting at 50 (8 channel offset)
-    for (let i = 0; i < 38; i++) {
+    // fixtures starting at 50 (8 channel offset)
+    for (let i = 0; i < TOTAL_FIXTURES; i++) {
         const fixtureNum = i + 1; // 1-indexed for logical odd/even
         const isOdd = (fixtureNum % 2 !== 0);
         
@@ -488,7 +489,7 @@ socket.on('channel-updated', ({ channel, value }) => {
     }
     
     const relCh = channel - 50;
-    if (relCh >= 0 && relCh < 38 * 8) {
+    if (relCh >= 0 && relCh < TOTAL_FIXTURES * 8) {
         const fixtureOffset = relCh % 8;
         if (fixtureOffset === 0 && relCh === 0) {
             state.rgb.master = value;
@@ -660,7 +661,7 @@ function stopRainbow(broadcast = true, restoreState = true) {
     if (restoreState && rainbowSnapshot) {
         const { r, g, b, master } = rainbowSnapshot;
         const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
-        for (let i = 0; i < 38; i++) {
+        for (let i = 0; i < TOTAL_FIXTURES; i++) {
             const startCh = 50 + (i * 8);
             socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
             socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
@@ -683,8 +684,8 @@ function startRainbow(broadcast = true) {
         rainbowInterval = setInterval(() => {
             const speed = parseInt(rainbowSpeedSlider.value);
             rainbowOffset = (rainbowOffset + speed) % 360;
-            for (let i = 0; i < 38; i++) {
-                const hue = (rainbowOffset + (i * (360 / 38))) % 360;
+            for (let i = 0; i < TOTAL_FIXTURES; i++) {
+                const hue = (rainbowOffset + (i * (360 / TOTAL_FIXTURES))) % 360;
                 const rgb = hslToRgb(hue, 100, 50);
                 const startCh = 50 + (i * 8);
                 socket.emit('update-channel', { channel: startCh,     value: state.rgb.master, fadeTime: 0 });
@@ -738,7 +739,7 @@ function stopOddEven(broadcast = true, restoreState = true) {
     if (restoreState && oddEvenSnapshot !== null) {
         const master = oddEvenSnapshot;
         const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
-        for (let i = 0; i < 38; i++) {
+        for (let i = 0; i < TOTAL_FIXTURES; i++) {
             const startCh = 50 + (i * 8);
             socket.emit('update-channel', { channel: startCh, value: master, fadeTime });
         }
@@ -758,7 +759,7 @@ function startOddEven(broadcast = true) {
         const intervalMs = (60 / bpm) * 1000;
         oddEvenInterval = setInterval(() => {
             oddEvenPhase = !oddEvenPhase;
-            for (let i = 0; i < 38; i++) {
+            for (let i = 0; i < TOTAL_FIXTURES; i++) {
                 const isOdd = (i % 2 === 0);
                 const dimVal = (isOdd !== oddEvenPhase) ? state.rgb.master : 0;
                 const startCh = 50 + (i * 8);
