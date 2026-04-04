@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="da">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Art-Net Betania</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/@jaames/iro@5"></script>
+</head>
+<body class="dark-theme">
+    <header>
+        <div class="logo">
+            <h1>ART-NET <span>BETANIA</span></h1>
+            <div id="status-indicator" class="status-dot"></div>
+            
+            <div class="fade-input-group global-fade-header" style="margin-left: 2rem; display: flex; align-items: center; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.1); padding: 5px 15px; border-radius: 8px;">
+                <label style="color:#a0a0a0; font-size: 0.7rem; margin-right: 10px; font-weight: 800; letter-spacing: 1px;">GLOBAL FADE:</label>
+                <input type="number" id="master-fade-time" value="500" step="100" min="0" style="background: transparent; color: var(--accent-color); width: 50px; border: none; font-size: 1rem; font-family: var(--font-mono); text-align: right; outline: none; font-weight:bold;">
+                <span class="unit" style="color: #666; margin-left: 5px; font-family: var(--font-mono);">ms</span>
+            </div>
+        </div>
+        
+        <div class="header-controls">
+            <div class="master-toggle">
+                <span class="toggle-label" id="toggle-text">OFF</span>
+                <label class="switch">
+                    <input type="checkbox" id="controller-enable">
+                    <span class="slider round"></span>
+                </label>
+            </div>
+            <button id="btn-settings" class="icon-btn" title="Indstillinger">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+            </button>
+        </div>
+    </header>
+
+    <main>
+        <div class="dashboard-top">
+            
+            <!-- Left Column: Frontlys Master Hero -->
+            <section class="panel master-panel">
+                <div class="panel-header">
+                    <div class="title-group">
+                        <h2>FRONTLYS</h2>
+                        <span class="subtitle">Master Control</span>
+                    </div>
+                </div>
+                
+                <div class="master-fader-hero">
+                    <div class="fader-container master-fader huge-fader">
+                        <label>FRONT MX</label>
+                        <input type="range" id="front-master-dimmer" min="0" max="255" value="255">
+                        <span class="fader-value active">255</span>
+                    </div>
+                </div>
+
+                <div class="master-actions">
+                    <button id="toggle-submasters" class="btn-ghost toggle-btn">VIS ALLE DIMMERS</button>
+                    <div class="action-row">
+                        <button onclick="allDimmersFull()" class="btn-ghost highlight-green">FULL ON</button>
+                        <button onclick="allDimmersOff()" class="btn-ghost highlight-red">BLACKOUT</button>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Right Column: RGB Group Master -->
+            <section class="panel master-panel accent-panel">
+                <div class="panel-header">
+                    <div class="title-group">
+                        <h2>RGB GRUPPE</h2>
+                        <span class="subtitle">Master Control</span>
+                    </div>
+                </div>
+                
+                <div class="master-fader-hero">
+                    <div class="fader-container master-fader huge-fader">
+                        <label>RGB MX</label>
+                        <input type="range" id="rgb-master-dimmer" min="0" max="255" value="0">
+                        <span class="fader-value">0</span>
+                    </div>
+                </div>
+
+                <div class="master-actions">
+                    <button id="toggle-rgb-panel" class="btn-ghost toggle-btn">VÆLG FARVE & OVERSTYRING</button>
+                    <div class="action-row">
+                        <button id="btn-rgb-full-on" class="btn-ghost highlight-green">FULL ON</button>
+                        <button id="btn-rgb-blackout" class="btn-ghost highlight-red">BLACKOUT</button>
+                    </div>
+                </div>
+            </section>
+        </div>
+
+        <!-- Hidden Extended Drawer for RGB -->
+        <section class="panel dimmers-drawer" id="rgb-extended-panel" style="margin-bottom: 2rem;">
+            <div class="panel-header" style="flex-direction: column; align-items: center; gap: 1.5rem;">
+                <div class="title-group" style="text-align: center;">
+                    <h2>FARVEVALG & SELEKTION</h2>
+                    <span class="subtitle">38 Armaturer (Start CH 50)</span>
+                </div>
+                
+                <div class="segment-control" id="fixture-selector">
+                    <button class="seg-btn active" data-sel="ALL">ALLE ARMATURER</button>
+                    <button class="seg-btn" data-sel="ODD">ULIGE (ODD)</button>
+                    <button class="seg-btn" data-sel="EVEN">LIGE (EVEN)</button>
+                </div>
+            </div>
+            
+            <div class="rgb-content" style="display:flex; flex-wrap:nowrap; gap:4rem; justify-content:center; padding: 3rem; align-items: center;">
+                <div class="picker-wrapper">
+                    <div id="color-picker-container"></div>
+                </div>
+                
+                <div class="manual-rgb-faders" style="display:flex; gap: 1.5rem; background: rgba(0,0,0,0.4); padding: 2rem 2.5rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.03); box-shadow: inset 0 5px 20px rgba(0,0,0,0.5); position: relative; margin-left: 2rem;">
+                    <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--panel-bg); padding: 0 10px; font-size: 0.65rem; font-weight: 800; color: #888; letter-spacing: 1px; border-radius: 4px;">MANUEL OVERSTYRING</div>
+                    <div class="fader-container small-fader red">
+                        <label>R</label>
+                        <input type="range" id="rgb-r" min="0" max="255" value="255">
+                        <span class="fader-value">255</span>
+                    </div>
+                    <div class="fader-container small-fader green">
+                        <label>G</label>
+                        <input type="range" id="rgb-g" min="0" max="255" value="255">
+                        <span class="fader-value">255</span>
+                    </div>
+                    <div class="fader-container small-fader blue">
+                        <label>B</label>
+                        <input type="range" id="rgb-b" min="0" max="255" value="255">
+                        <span class="fader-value">255</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="presets-row">
+                <button class="btn-preset white" data-color="#FFFFFF">HVID</button>
+                <button class="btn-preset red" data-color="#FF0000">RØD</button>
+                <button class="btn-preset green" data-color="#00FF00">GRØN</button>
+                <button class="btn-preset blue" data-color="#0000FF">BLÅ</button>
+                <button class="btn-preset blackout" id="all-blackout">TOTAL BLACKOUT (ALT)</button>
+            </div>
+        </section>
+
+        <!-- Hidden Extended Drawer for all channels -->
+        <section class="panel dimmers-drawer" id="dimmers-extended-panel">
+            <div class="panel-header">
+                <div class="title-group">
+                    <h2>FRONTLYS UNDERGRUPPER</h2>
+                    <span class="subtitle">Individuel Kanalstyring (19-28)</span>
+                </div>
+            </div>
+            <div class="scroll-wrapper">
+                <div class="fader-row" id="dimmer-grid">
+                    <!-- Faders injected here via JS -->
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Settings Modal (Hidden by default) -->
+    <div id="settings-modal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2>Opsætning af Art-Net</h2>
+                <button id="close-modal" class="icon-btn close-btn">&times;</button>
+            </div>
+            <div class="modal-body">
+                <div class="input-group">
+                    <label>Art-Net IP Adresse</label>
+                    <input type="text" id="node-ip" placeholder="192.168.10.150 / 192.168.10.255">
+                    <p class="help-text">Tip: Brug .255 til sidst for 'Broadcast', hvis systemet ikke reagerer på en specifik IP-adresse.</p>
+                </div>
+                <div class="input-group">
+                    <label>Universe</label>
+                    <input type="number" id="node-universe" placeholder="1" min="0" max="15">
+                </div>
+                <button id="save-config" class="btn-primary">Gem Opsætning</button>
+            </div>
+            <div class="modal-footer">
+                <p>Status: <span id="modal-status">Afventer...</span></p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Backdrop for modal -->
+    <div id="modal-backdrop" class="modal-backdrop"></div>
+
+    <script src="/socket.io/socket.io.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>
