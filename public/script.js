@@ -189,6 +189,7 @@ segBtns.forEach(btn => {
         segBtns.forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         rgbSelectionMode = btn.getAttribute('data-sel');
+        socket.emit('ui-sync', { type: 'selectionMode', value: rgbSelectionMode });
         
         // Restore UI State based on memory
         const mem = rgbStore[rgbSelectionMode];
@@ -232,6 +233,14 @@ colorPicker.on('color:change', (color) => {
     syncManualSliders();
     updateRGBGroup();
     saveRGBStateLocally();
+    socket.emit('ui-sync', { 
+        type: 'rgbManual', 
+        r: state.rgb.r, 
+        g: state.rgb.g, 
+        b: state.rgb.b, 
+        master: state.rgb.master,
+        mode: rgbSelectionMode 
+    });
 });
 
 const rgbMaster = document.getElementById('rgb-master-dimmer');
@@ -294,6 +303,14 @@ function syncManualSliders() {
         
         updateRGBGroup();
         saveRGBStateLocally();
+        socket.emit('ui-sync', { 
+            type: 'rgbManual', 
+            r: state.rgb.r, 
+            g: state.rgb.g, 
+            b: state.rgb.b, 
+            master: state.rgb.master,
+            mode: rgbSelectionMode 
+        });
     });
 });
 
@@ -534,6 +551,40 @@ socket.on('ui-sync', (data) => {
             if (data.state === 'start') startOddEven(false);
             else stopOddEven(false, false);
         }
+    } else if (data.type === 'selectionMode') {
+        rgbSelectionMode = data.value;
+        const btn = document.querySelector(`.seg-btn[data-sel="${data.value}"]`);
+        if (btn) {
+            segBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+            const mem = rgbStore[rgbSelectionMode];
+            state.rgb.r = mem.r;
+            state.rgb.g = mem.g;
+            state.rgb.b = mem.b;
+            syncManualSliders();
+            isInternalUpdate = true;
+            colorPicker.color.set({r: mem.r, g: mem.g, b: mem.b});
+            setTimeout(() => { isInternalUpdate = false; }, 50);
+        }
+    } else if (data.type === 'rgbManual') {
+        state.rgb.r = data.r;
+        state.rgb.g = data.g;
+        state.rgb.b = data.b;
+        state.rgb.master = data.master;
+        rgbSelectionMode = data.mode;
+        
+        // Update memory store
+        rgbStore[rgbSelectionMode] = { r: data.r, g: data.g, b: data.b };
+        
+        syncManualSliders();
+        rgbMaster.value = data.master;
+        rgbMaster.nextElementSibling.textContent = data.master;
+        if(data.master > 0) rgbMaster.nextElementSibling.classList.add('active');
+        else rgbMaster.nextElementSibling.classList.remove('active');
+
+        isInternalUpdate = true;
+        colorPicker.color.set({ r: data.r, g: data.g, b: data.b });
+        setTimeout(() => { isInternalUpdate = false; }, 50);
     }
 });
 
@@ -558,6 +609,15 @@ document.querySelectorAll('.btn-preset').forEach(btn => {
             rgbMaster.nextElementSibling.textContent = '255';
             rgbMaster.nextElementSibling.classList.add('active');
             updateRGBGroup();
+            
+            socket.emit('ui-sync', { 
+                type: 'rgbManual', 
+                r: state.rgb.r, 
+                g: state.rgb.g, 
+                b: state.rgb.b, 
+                master: state.rgb.master,
+                mode: rgbSelectionMode 
+            });
         }
     });
 });
