@@ -181,7 +181,39 @@ io.on('connection', (socket) => {
     });
 });
 
+const os = require('os');
+const { execSync } = require('child_process');
+
 app.use(express.static('public'));
+
+app.get('/api/stats', (req, res) => {
+    let cpuTemp = '?';
+    try {
+        const raw = execSync('cat /sys/class/thermal/thermal_zone0/temp', { timeout: 1000 }).toString().trim();
+        cpuTemp = (parseInt(raw) / 1000).toFixed(1);
+    } catch(e) {}
+
+    const upSec = os.uptime();
+    const days = Math.floor(upSec / 86400);
+    const hours = Math.floor((upSec % 86400) / 3600);
+    const mins = Math.floor((upSec % 3600) / 60);
+
+    const totalMem = os.totalmem();
+    const freeMem = os.freemem();
+    const usedMem = totalMem - freeMem;
+
+    const loadAvg = os.loadavg();
+
+    res.json({
+        cpuTemp,
+        uptime: `${days}d ${hours}t ${mins}m`,
+        memUsed: Math.round(usedMem / 1024 / 1024),
+        memTotal: Math.round(totalMem / 1024 / 1024),
+        memPercent: Math.round((usedMem / totalMem) * 100),
+        load: loadAvg[0].toFixed(2),
+        hostname: os.hostname()
+    });
+});
 
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, '0.0.0.0', () => {

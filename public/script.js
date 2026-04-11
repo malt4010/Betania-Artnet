@@ -348,16 +348,42 @@ function updateRGBGroup() {
 }
 
 // Modal & Config Handling
+let statsTimer = null;
+
+function fetchPiStats() {
+    fetch('/api/stats').then(r => r.json()).then(s => {
+        const tempEl = document.getElementById('stat-temp');
+        const ramEl = document.getElementById('stat-ram');
+        const loadEl = document.getElementById('stat-load');
+        const uptimeEl = document.getElementById('stat-uptime');
+
+        tempEl.textContent = s.cpuTemp + '°C';
+        tempEl.className = 'stat-val' + (s.cpuTemp >= 80 ? ' danger' : s.cpuTemp >= 65 ? ' warn' : '');
+
+        ramEl.textContent = s.memUsed + '/' + s.memTotal + ' MB (' + s.memPercent + '%)';
+        ramEl.className = 'stat-val' + (s.memPercent >= 90 ? ' danger' : s.memPercent >= 75 ? ' warn' : '');
+
+        loadEl.textContent = s.load;
+        loadEl.className = 'stat-val' + (s.load >= 3 ? ' danger' : s.load >= 2 ? ' warn' : '');
+
+        uptimeEl.textContent = s.uptime;
+    }).catch(() => {});
+}
+
 function openModal() {
     ipInput.value = state.config.ip;
     universeInput.value = state.config.universe;
     settingsModal.classList.add('show');
     modalBackdrop.classList.add('show');
+    fetchPiStats();
+    statsTimer = setInterval(fetchPiStats, 3000);
 }
 
 function closeModal() {
     settingsModal.classList.remove('show');
     modalBackdrop.classList.remove('show');
+    clearInterval(statsTimer);
+    statsTimer = null;
 }
 
 btnSettings.addEventListener('click', openModal);
