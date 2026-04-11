@@ -212,8 +212,9 @@ segBtns.forEach(btn => {
 
 let isAppInit = true; // Lock events during startup
 
+const pickerSize = window.innerWidth <= 600 ? 200 : 260;
 const colorPicker = new iro.ColorPicker("#color-picker-container", {
-    width: 260,
+    width: pickerSize,
     color: "#fff",
     layout: [
         { component: iro.ui.Wheel }

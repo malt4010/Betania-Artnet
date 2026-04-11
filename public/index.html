@@ -102,7 +102,7 @@
 
         <!-- Hidden Extended Drawer for RGB -->
         <section class="panel dimmers-drawer" id="rgb-extended-panel" style="margin-bottom: 2rem;">
-            <div class="panel-header" style="flex-direction: column; align-items: center; gap: 1.5rem;">
+            <div class="panel-header rgb-panel-header">
                 <div class="title-group" style="text-align: center;">
                     <h2>FARVEVALG & SELEKTION</h2>
                     <span class="subtitle">38 Armaturer (Start CH 50)</span>
@@ -115,13 +115,13 @@
                 </div>
             </div>
             
-            <div class="rgb-content" style="display:flex; flex-wrap:nowrap; gap:4rem; justify-content:center; padding: 3rem; align-items: center;">
+            <div class="rgb-content">
                 <div class="picker-wrapper">
                     <div id="color-picker-container"></div>
                 </div>
                 
-                <div class="manual-rgb-faders" style="display:flex; gap: 1.5rem; background: rgba(0,0,0,0.4); padding: 2rem 2.5rem; border-radius: 16px; border: 1px solid rgba(255,255,255,0.03); box-shadow: inset 0 5px 20px rgba(0,0,0,0.5); position: relative; margin-left: 2rem;">
-                    <div style="position: absolute; top: -10px; left: 50%; transform: translateX(-50%); background: var(--panel-bg); padding: 0 10px; font-size: 0.65rem; font-weight: 800; color: #888; letter-spacing: 1px; border-radius: 4px;">MANUEL OVERSTYRING</div>
+                <div class="manual-rgb-faders">
+                    <div class="manual-rgb-title">MANUEL OVERSTYRING</div>
                     <div class="fader-container small-fader red">
                         <label>R</label>
                         <input type="range" id="rgb-r" min="0" max="255" value="255">
