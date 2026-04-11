@@ -576,8 +576,11 @@ socket.on('ui-sync', (data) => {
     } else if (data.type === 'rainbowSpeed') {
         rainbowSpeedSlider.value = data.value;
     } else if (data.type === 'waveSpeed') {
-        document.getElementById('wave-speed').value = data.value;
-        document.getElementById('wave-speed-val').textContent = data.value;
+        waveSpeedSlider.value = data.value;
+        waveSpeedValDisplay.textContent = formatWaveSpeed(data.value);
+    } else if (data.type === 'waveWidth') {
+        waveWidthSlider.value = data.value;
+        waveWidthValDisplay.textContent = data.value;
     } else if (data.type === 'waveSize') {
         document.getElementById('wave-size').value = data.value;
         document.getElementById('wave-size-val').textContent = data.value + '%';
@@ -1035,12 +1038,24 @@ const btnWave = document.getElementById('btn-wave');
 const cardWave = document.getElementById('card-wave');
 const waveSpeedSlider = document.getElementById('wave-speed');
 const waveSpeedValDisplay = document.getElementById('wave-speed-val');
+const waveWidthSlider = document.getElementById('wave-width');
+const waveWidthValDisplay = document.getElementById('wave-width-val');
 const waveSizeSlider = document.getElementById('wave-size');
 const waveSizeValDisplay = document.getElementById('wave-size-val');
 
+function formatWaveSpeed(val) {
+    const v = parseInt(val);
+    if (v === 0) return '⏸ 0';
+    return (v < 0 ? '◀ ' : '▶ ') + Math.abs(v);
+}
+
 waveSpeedSlider.addEventListener('input', () => {
-    waveSpeedValDisplay.textContent = waveSpeedSlider.value;
+    waveSpeedValDisplay.textContent = formatWaveSpeed(waveSpeedSlider.value);
     socket.emit('ui-sync', { type: 'waveSpeed', value: waveSpeedSlider.value });
+});
+waveWidthSlider.addEventListener('input', () => {
+    waveWidthValDisplay.textContent = waveWidthSlider.value;
+    socket.emit('ui-sync', { type: 'waveWidth', value: waveWidthSlider.value });
 });
 waveSizeSlider.addEventListener('input', () => {
     waveSizeValDisplay.textContent = waveSizeSlider.value + '%';
@@ -1084,17 +1099,22 @@ function startWave(broadcast = true) {
         const TICK_MS = 40;
         waveInterval = setInterval(() => {
             const bpm = parseInt(waveSpeedSlider.value);
+            const width = parseInt(waveWidthSlider.value);
             const size = parseInt(waveSizeSlider.value) / 100;
-            const cycleDuration = (60 / bpm) * 1000;
-            const step = TICK_MS / cycleDuration;
-            wavePhase = (wavePhase + step) % 1;
+
+            if (bpm !== 0) {
+                const cycleDuration = (60 / Math.abs(bpm)) * 1000;
+                const step = TICK_MS / cycleDuration;
+                const direction = bpm > 0 ? 1 : -1;
+                wavePhase = ((wavePhase + step * direction) % 1 + 1) % 1;
+            }
 
             const master = state.rgb.master;
             const minDim = Math.round(master * (1 - size));
 
             for (let i = 0; i < TOTAL_FIXTURES; i++) {
-                // Each fixture gets a phase offset based on its position
-                const fixturePhase = (wavePhase + (i / TOTAL_FIXTURES)) % 1;
+                // width controls how many waves fit across all fixtures
+                const fixturePhase = ((wavePhase + (i / TOTAL_FIXTURES) * width) % 1 + 1) % 1;
                 const sine = (Math.sin(fixturePhase * Math.PI * 2) + 1) / 2;
                 const dimVal = Math.round(minDim + (master - minDim) * sine);
 
