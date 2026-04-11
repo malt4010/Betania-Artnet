@@ -155,9 +155,11 @@ io.on('connection', (socket) => {
         Object.assign(config, newConfig);
         console.log('Config Updated:', config);
         
-        // If re-enabling, send state immediately
+        // If re-enabling, force fast mode so Art-Net nodes pick up state
         if (config.enabled) {
             lastActiveTime = Date.now();
+            updateInterval = 40;
+            resetTimer();
             sendArtNet();
         }
         
