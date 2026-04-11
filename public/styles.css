@@ -670,6 +670,7 @@ body.light-theme .btn-preset.custom.empty { background: rgba(0,0,0,0.02); color:
 }
 .effect-row {
     display: flex; align-items: center; gap: 0.6rem;
+    padding: 6px 0;
 }
 .effect-row label {
     font-size: 0.6rem; font-weight: 700; color: #555;
@@ -677,12 +678,13 @@ body.light-theme .btn-preset.custom.empty { background: rgba(0,0,0,0.02); color:
 }
 .effect-slider {
     -webkit-appearance: none; appearance: none;
-    flex: 1; height: 6px; background: #333; border-radius: 3px;
+    flex: 1; height: 8px; background: #333; border-radius: 4px;
     outline: none; cursor: pointer;
+    padding: 10px 0;
 }
 .effect-slider::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
-    width: 24px; height: 24px; border-radius: 50%;
+    width: 30px; height: 30px; border-radius: 50%;
     background: var(--accent-color); cursor: pointer;
     box-shadow: 0 0 8px var(--accent-glow);
 }
