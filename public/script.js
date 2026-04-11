@@ -10,6 +10,10 @@ let state = {
 
 const TOTAL_FIXTURES = 39;
 
+function dmxToPercent(val) {
+    return Math.round((val / 255) * 100);
+}
+
 function saveFrontStateLocally() {
     localStorage.setItem('artnetFrontlysUI', JSON.stringify({
         master: state.frontMaster,
@@ -87,8 +91,8 @@ toggleRgbBtn.addEventListener('click', () => {
 
 frontMasterSlider.addEventListener('input', (e) => {
     state.frontMaster = parseInt(e.target.value);
-    e.target.nextElementSibling.textContent = state.frontMaster;
-    
+    e.target.nextElementSibling.textContent = dmxToPercent(state.frontMaster) + '%';
+
     if(state.frontMaster > 0) e.target.nextElementSibling.classList.add('active');
     else e.target.nextElementSibling.classList.remove('active');
     
@@ -122,7 +126,7 @@ function initDimmers() {
             state.dimmers[ch].value = val;
             updateDimmerOutput(ch);
             
-            valueDisplay.textContent = val;
+            valueDisplay.textContent = dmxToPercent(val) + '%';
             if (val > 0) valueDisplay.classList.add('active');
             else valueDisplay.classList.remove('active');
             saveFrontStateLocally();
@@ -251,7 +255,7 @@ const rgbB = document.getElementById('rgb-b');
 btnRgbFullOn.addEventListener('click', () => {
     state.rgb.master = 255;
     rgbMaster.value = 255;
-    rgbMaster.nextElementSibling.textContent = '255';
+    rgbMaster.nextElementSibling.textContent = '100%';
     rgbMaster.nextElementSibling.classList.add('active');
     updateRGBGroup();
     saveRGBStateLocally();
@@ -260,7 +264,7 @@ btnRgbFullOn.addEventListener('click', () => {
 btnRgbBlackout.addEventListener('click', () => {
     state.rgb.master = 0;
     rgbMaster.value = 0;
-    rgbMaster.nextElementSibling.textContent = '0';
+    rgbMaster.nextElementSibling.textContent = '0%';
     rgbMaster.nextElementSibling.classList.remove('active');
     updateRGBGroup();
     saveRGBStateLocally();
@@ -297,10 +301,14 @@ function syncManualSliders() {
             setTimeout(() => { isInternalUpdate = false; }, 50);
         }
         
-        slider.nextElementSibling.textContent = slider.value;
+        if (slider.id === 'rgb-master-dimmer') {
+            slider.nextElementSibling.textContent = dmxToPercent(parseInt(slider.value)) + '%';
+        } else {
+            slider.nextElementSibling.textContent = slider.value;
+        }
         if(parseInt(slider.value) > 0) slider.nextElementSibling.classList.add('active');
         else slider.nextElementSibling.classList.remove('active');
-        
+
         updateRGBGroup();
         saveRGBStateLocally();
         socket.emit('ui-sync', { 
@@ -402,10 +410,10 @@ socket.on('init', (data) => {
         if (localState && localState.master !== undefined && localState.dimmers) {
             state.frontMaster = localState.master;
             frontMasterSlider.value = localState.master;
-            frontMasterSlider.nextElementSibling.textContent = localState.master;
+            frontMasterSlider.nextElementSibling.textContent = dmxToPercent(localState.master) + '%';
             if (localState.master > 0) frontMasterSlider.nextElementSibling.classList.add('active');
             else frontMasterSlider.nextElementSibling.classList.remove('active');
-            
+
             for (let ch = 19; ch <= 28; ch++) {
                 if (localState.dimmers[ch]) {
                     const savedVal = localState.dimmers[ch].value;
@@ -414,7 +422,7 @@ socket.on('init', (data) => {
                     const dispDOM = document.getElementById(`val-${ch}`);
                     if (faderDOM) faderDOM.value = savedVal;
                     if (dispDOM) {
-                        dispDOM.textContent = savedVal;
+                        dispDOM.textContent = dmxToPercent(savedVal) + '%';
                         if (savedVal > 0) dispDOM.classList.add('active');
                         else dispDOM.classList.remove('active');
                     }
@@ -424,18 +432,18 @@ socket.on('init', (data) => {
             // Fallback: Assume Master is 255
             state.frontMaster = 255;
             frontMasterSlider.value = 255;
-            frontMasterSlider.nextElementSibling.textContent = '255';
+            frontMasterSlider.nextElementSibling.textContent = '100%';
             frontMasterSlider.nextElementSibling.classList.add('active');
-            
+
             for (let ch = 19; ch <= 28; ch++) {
                 const serverVal = data.targetDmx[ch - 1] || 0;
                 state.dimmers[ch].value = serverVal;
                 const faderDOM = document.getElementById(`fader-${ch}`);
                 const dispDOM = document.getElementById(`val-${ch}`);
-                
+
                 if(faderDOM) faderDOM.value = serverVal;
                 if(dispDOM) {
-                    dispDOM.textContent = serverVal;
+                    dispDOM.textContent = dmxToPercent(serverVal) + '%';
                     if(serverVal > 0) dispDOM.classList.add('active');
                     else dispDOM.classList.remove('active');
                 }
@@ -478,7 +486,7 @@ socket.on('init', (data) => {
         state.rgb.b = setB;
         
         rgbMaster.value = serverRgbMaster;
-        rgbMaster.nextElementSibling.textContent = serverRgbMaster;
+        rgbMaster.nextElementSibling.textContent = dmxToPercent(serverRgbMaster) + '%';
         if(serverRgbMaster > 0) rgbMaster.nextElementSibling.classList.add('active');
         else rgbMaster.nextElementSibling.classList.remove('active');
         
@@ -498,20 +506,20 @@ socket.on('channel-updated', ({ channel, value }) => {
         const dispDOM = document.getElementById(`val-${channel}`);
         if (faderDOM) faderDOM.value = value;
         if (dispDOM) {
-            dispDOM.textContent = value;
+            dispDOM.textContent = dmxToPercent(value) + '%';
             if (value > 0) dispDOM.classList.add('active');
             else dispDOM.classList.remove('active');
         }
         return;
     }
-    
+
     const relCh = channel - 50;
     if (relCh >= 0 && relCh < TOTAL_FIXTURES * 8) {
         const fixtureOffset = relCh % 8;
         if (fixtureOffset === 0 && relCh === 0) {
             state.rgb.master = value;
             rgbMaster.value = value;
-            rgbMaster.nextElementSibling.textContent = value;
+            rgbMaster.nextElementSibling.textContent = dmxToPercent(value) + '%';
             if (value > 0) rgbMaster.nextElementSibling.classList.add('active');
             else rgbMaster.nextElementSibling.classList.remove('active');
         } else if (fixtureOffset === 1) state.rgb.r = value;
@@ -531,7 +539,7 @@ socket.on('ui-sync', (data) => {
     if (data.type === 'frontMaster') {
         state.frontMaster = data.value;
         frontMasterSlider.value = data.value;
-        frontMasterSlider.nextElementSibling.textContent = data.value;
+        frontMasterSlider.nextElementSibling.textContent = dmxToPercent(data.value) + '%';
         if (data.value > 0) frontMasterSlider.nextElementSibling.classList.add('active');
         else frontMasterSlider.nextElementSibling.classList.remove('active');
     } else if (data.type === 'fadeTime') {
@@ -579,7 +587,7 @@ socket.on('ui-sync', (data) => {
         
         syncManualSliders();
         rgbMaster.value = data.master;
-        rgbMaster.nextElementSibling.textContent = data.master;
+        rgbMaster.nextElementSibling.textContent = dmxToPercent(data.master) + '%';
         if(data.master > 0) rgbMaster.nextElementSibling.classList.add('active');
         else rgbMaster.nextElementSibling.classList.remove('active');
 
@@ -607,7 +615,7 @@ document.querySelectorAll('.btn-preset').forEach(btn => {
             colorPicker.color.set(color);
             rgbMaster.value = 255;
             state.rgb.master = 255;
-            rgbMaster.nextElementSibling.textContent = '255';
+            rgbMaster.nextElementSibling.textContent = '100%';
             rgbMaster.nextElementSibling.classList.add('active');
             updateRGBGroup();
             
@@ -627,7 +635,7 @@ function allOff() {
     allDimmersOff();
     rgbMaster.value = 0;
     state.rgb.master = 0;
-    rgbMaster.nextElementSibling.textContent = '0';
+    rgbMaster.nextElementSibling.textContent = '0%';
     rgbMaster.nextElementSibling.classList.remove('active');
     updateRGBGroup();
 }
@@ -639,7 +647,7 @@ function allDimmersOff() {
         
         document.getElementById(`fader-${ch}`).value = 0;
         const valDisp = document.getElementById(`val-${ch}`);
-        valDisp.textContent = '0';
+        valDisp.textContent = '0%';
         valDisp.classList.remove('active');
     }
     saveFrontStateLocally();
@@ -649,10 +657,10 @@ function allDimmersFull() {
     for (let ch = 19; ch <= 28; ch++) {
         state.dimmers[ch].value = 255;
         updateDimmerOutput(ch);
-        
+
         document.getElementById(`fader-${ch}`).value = 255;
         const valDisp = document.getElementById(`val-${ch}`);
-        valDisp.textContent = '255';
+        valDisp.textContent = '100%';
         valDisp.classList.add('active');
     }
     saveFrontStateLocally();
