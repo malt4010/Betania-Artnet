@@ -553,6 +553,10 @@ socket.on('ui-sync', (data) => {
         bpmSlider.value = data.value;
         bpmValDisplay.textContent = data.value;
         if (oddEvenInterval) { stopOddEven(false, false); startOddEven(false); }
+    } else if (data.type === 'pulseBpm') {
+        pulseBpmSlider.value = data.value;
+        pulseBpmValDisplay.textContent = data.value;
+        if (pulseInterval) { stopPulse(false, false); startPulse(false); }
     } else if (data.type === 'effect') {
         if (data.effect === 'rainbow') {
             if (data.state === 'start') startRainbow(false);
@@ -560,6 +564,9 @@ socket.on('ui-sync', (data) => {
         } else if (data.effect === 'oddeven') {
             if (data.state === 'start') startOddEven(false);
             else stopOddEven(false, false);
+        } else if (data.effect === 'pulse') {
+            if (data.state === 'start') startPulse(false);
+            else stopPulse(false, false);
         }
     } else if (data.type === 'selectionMode') {
         rgbSelectionMode = data.value;
@@ -790,7 +797,8 @@ function stopRainbow(broadcast = true, restoreState = true) {
 }
 
 function startRainbow(broadcast = true) {
-    stopOddEven(false); // Stop conflicting effect without restoring
+    stopOddEven(false, false);
+    stopPulse(false, false);
     
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'rainbow', state: 'start' });
@@ -867,7 +875,8 @@ function stopOddEven(broadcast = true, restoreState = true) {
 }
 
 function startOddEven(broadcast = true) {
-    stopRainbow(false); // Stop conflicting effect without restoring
+    stopRainbow(false, false);
+    stopPulse(false, false);
     
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'start' });
@@ -899,4 +908,86 @@ function startOddEven(broadcast = true) {
 btnOddEven.addEventListener('click', () => {
     if (oddEvenInterval || btnOddEven.classList.contains('running')) stopOddEven();
     else startOddEven();
+});
+
+// --- ODD/EVEN PULSE (smooth fade) ---
+let pulseInterval = null;
+let pulsePhase = 0; // 0..1 continuous
+let pulseSnapshot = null;
+const btnPulse = document.getElementById('btn-oddeven-pulse');
+const cardPulse = document.getElementById('card-oddeven-pulse');
+const pulseBpmSlider = document.getElementById('pulse-bpm');
+const pulseBpmValDisplay = document.getElementById('pulse-bpm-val');
+
+pulseBpmSlider.addEventListener('input', () => {
+    pulseBpmValDisplay.textContent = pulseBpmSlider.value;
+    socket.emit('ui-sync', { type: 'pulseBpm', value: pulseBpmSlider.value });
+});
+
+function stopPulse(broadcast = true, restoreState = true) {
+    clearInterval(pulseInterval);
+    pulseInterval = null;
+    btnPulse.textContent = 'START';
+    btnPulse.classList.remove('running');
+    cardPulse.classList.remove('active');
+
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'pulse', state: 'stop' });
+    }
+
+    if (restoreState && pulseSnapshot !== null) {
+        const { r, g, b, master } = pulseSnapshot;
+        const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
+        for (let i = 0; i < TOTAL_FIXTURES; i++) {
+            const startCh = 50 + (i * 8);
+            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
+        }
+        pulseSnapshot = null;
+    }
+}
+
+function startPulse(broadcast = true) {
+    stopRainbow(false);
+    stopOddEven(false, false);
+
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'pulse', state: 'start' });
+        pulseSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
+
+        pulsePhase = 0;
+        const TICK_MS = 40;
+        pulseInterval = setInterval(() => {
+            const bpm = parseInt(pulseBpmSlider.value);
+            const cycleDuration = (60 / bpm) * 1000;
+            const step = TICK_MS / cycleDuration;
+            pulsePhase = (pulsePhase + step) % 1;
+
+            // Sine wave: 0..1..0 per cycle, smooth crossfade
+            const sine = (Math.sin(pulsePhase * Math.PI * 2) + 1) / 2;
+            const oddDim = Math.round(sine * state.rgb.master);
+            const evenDim = Math.round((1 - sine) * state.rgb.master);
+
+            for (let i = 0; i < TOTAL_FIXTURES; i++) {
+                const isOdd = (i % 2 === 0);
+                const dimVal = isOdd ? oddDim : evenDim;
+                const startCh = 50 + (i * 8);
+                socket.emit('update-channel', { channel: startCh,     value: dimVal, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 1, value: state.rgb.r, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 2, value: state.rgb.g, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 3, value: state.rgb.b, fadeTime: 0 });
+            }
+        }, TICK_MS);
+    }
+
+    btnPulse.textContent = 'STOP';
+    btnPulse.classList.add('running');
+    cardPulse.classList.add('active');
+}
+
+btnPulse.addEventListener('click', () => {
+    if (pulseInterval || btnPulse.classList.contains('running')) stopPulse();
+    else startPulse();
 });
