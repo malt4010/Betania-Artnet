@@ -662,6 +662,26 @@ function allDimmersFull() {
 initDimmers();
 updateStatusUI();
 
+// Theme toggle
+const themeBtns = document.querySelectorAll('.theme-btn');
+const savedTheme = localStorage.getItem('artnetTheme') || 'dark';
+if (savedTheme === 'light') {
+    document.body.classList.remove('dark-theme');
+    document.body.classList.add('light-theme');
+}
+themeBtns.forEach(btn => {
+    if (btn.dataset.theme === savedTheme) btn.classList.add('active');
+    else btn.classList.remove('active');
+    btn.addEventListener('click', () => {
+        themeBtns.forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const theme = btn.dataset.theme;
+        document.body.classList.remove('dark-theme', 'light-theme');
+        document.body.classList.add(theme + '-theme');
+        localStorage.setItem('artnetTheme', theme);
+    });
+});
+
 // Restore local preferences
 const globalFadeInput = document.getElementById('master-fade-time');
 const fadeDisplay = document.getElementById('fade-display');
