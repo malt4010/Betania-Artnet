@@ -871,23 +871,36 @@ function stopRainbow(broadcast = true, restoreState = true) {
         socket.emit('ui-sync', { type: 'effect', effect: 'rainbow', state: 'stop' });
     }
 
-    // Restore the color all fixtures had before rainbow started
+    // Restore per-fixture colors from before rainbow started
     if (restoreState && rainbowSnapshot) {
-        const { r, g, b, master } = rainbowSnapshot;
+        const { master, store, mode } = rainbowSnapshot;
         const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
+
+        // Restore rgbStore
+        rgbStore['ALL'] = store['ALL'];
+        rgbStore['ODD'] = store['ODD'];
+        rgbStore['EVEN'] = store['EVEN'];
+
+        // Restore each fixture with its correct odd/even color
         for (let i = 0; i < TOTAL_FIXTURES; i++) {
+            const fixtureNum = i + 1;
+            const isOdd = (fixtureNum % 2 !== 0);
+            const col = isOdd ? store['ODD'] : store['EVEN'];
             const startCh = 50 + (i * 8);
             socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 1, value: col.r, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 2, value: col.g, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 3, value: col.b, fadeTime });
         }
-        state.rgb.r = r;
-        state.rgb.g = g;
-        state.rgb.b = b;
+
+        // Restore UI to the mode that was active
+        const mem = store[mode];
+        state.rgb.r = mem.r;
+        state.rgb.g = mem.g;
+        state.rgb.b = mem.b;
         syncManualSliders();
         isInternalUpdate = true;
-        colorPicker.color.set({ r, g, b });
+        colorPicker.color.set({ r: mem.r, g: mem.g, b: mem.b });
         setTimeout(() => { isInternalUpdate = false; }, 50);
         rainbowSnapshot = null;
     }
@@ -898,8 +911,12 @@ function startRainbow(broadcast = true) {
     
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'rainbow', state: 'start' });
-        // Snapshot current state locally to restore later
-        rainbowSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
+        // Snapshot current state including per-group colors
+        rainbowSnapshot = {
+            master: state.rgb.master,
+            store: JSON.parse(JSON.stringify(rgbStore)),
+            mode: rgbSelectionMode
+        };
 
         rainbowInterval = setInterval(() => {
             const speed = parseInt(rainbowSpeedSlider.value);
@@ -973,14 +990,12 @@ function stopWave(broadcast = true, restoreState = true) {
     }
 
     if (restoreState && waveSnapshot !== null) {
-        const { r, g, b, master } = waveSnapshot;
+        const { master } = waveSnapshot;
         const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
         for (let i = 0; i < TOTAL_FIXTURES; i++) {
             const startCh = 50 + (i * 8);
-            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
+            // Only restore dimmer - colors were never changed
+            socket.emit('update-channel', { channel: startCh, value: master, fadeTime });
         }
         waveSnapshot = null;
     }
@@ -991,7 +1006,7 @@ function startWave(broadcast = true) {
 
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'wave', state: 'start' });
-        waveSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
+        waveSnapshot = { master: state.rgb.master };
 
         wavePhase = 0;
         const TICK_MS = 40;
@@ -1011,16 +1026,13 @@ function startWave(broadcast = true) {
             const minDim = Math.round(master * (1 - size));
 
             for (let i = 0; i < TOTAL_FIXTURES; i++) {
-                // width controls how many waves fit across all fixtures
                 const fixturePhase = ((wavePhase + (i / TOTAL_FIXTURES) * width) % 1 + 1) % 1;
                 const sine = (Math.sin(fixturePhase * Math.PI * 2) + 1) / 2;
                 const dimVal = Math.round(minDim + (master - minDim) * sine);
 
                 const startCh = 50 + (i * 8);
-                socket.emit('update-channel', { channel: startCh,     value: dimVal, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 1, value: state.rgb.r, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 2, value: state.rgb.g, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 3, value: state.rgb.b, fadeTime: 0 });
+                // Only control dimmer - leave colors untouched
+                socket.emit('update-channel', { channel: startCh, value: dimVal, fadeTime: 0 });
             }
         }, TICK_MS);
     }
