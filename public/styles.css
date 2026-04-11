@@ -417,6 +417,7 @@ main { max-width: 1400px; margin: 2rem auto; padding: 0 1.5rem; }
 .btn-preset.red { border-bottom: 3px solid #ff0000; }
 .btn-preset.green { border-bottom: 3px solid #00ff00; }
 .btn-preset.blue { border-bottom: 3px solid #0000ff; }
+.btn-preset.lightblue { border-bottom: 3px solid #00B4B4; }
 .btn-preset.blackout { background: rgba(255,0,0,0.1); border-color: rgba(255,0,0,0.3); color: #ff0000; }
 
 
@@ -711,6 +712,7 @@ body.light-theme .btn-preset.white { border-bottom: 3px solid #bbb; }
 body.light-theme .btn-preset.red { border-bottom: 3px solid #e53935; background: rgba(229,57,53,0.06); }
 body.light-theme .btn-preset.green { border-bottom: 3px solid #43a047; background: rgba(67,160,71,0.06); }
 body.light-theme .btn-preset.blue { border-bottom: 3px solid #1e88e5; background: rgba(30,136,229,0.06); }
+body.light-theme .btn-preset.lightblue { border-bottom: 3px solid #00B4B4; background: rgba(0,180,180,0.06); }
 body.light-theme .btn-preset:active { transform: translateY(-1px); box-shadow: 0 3px 8px rgba(0,0,0,0.1); }
 body.light-theme .dimmers-drawer {
     box-shadow: 0 -2px 12px rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.06);
