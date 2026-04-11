@@ -452,6 +452,9 @@ main { max-width: 1400px; margin: 2rem auto; padding: 0 1.5rem; }
     padding: 1rem 1.5rem; border-top: 1px solid var(--panel-border); background: rgba(0,0,0,0.2);
     font-size: 0.75rem; color: var(--text-secondary); text-align: center; font-family: var(--font-mono);
 }
+.modal-footer .credit {
+    margin-top: 0.75rem; font-size: 0.6rem; color: #444; letter-spacing: 0.5px;
+}
 
 
 /* Scrollbar */
