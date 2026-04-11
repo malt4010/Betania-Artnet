@@ -549,21 +549,16 @@ socket.on('ui-sync', (data) => {
         localStorage.setItem('artnetFadeTime', data.value);
     } else if (data.type === 'rainbowSpeed') {
         rainbowSpeedSlider.value = data.value;
-    } else if (data.type === 'bpm') {
-        bpmSlider.value = data.value;
-        bpmValDisplay.textContent = data.value;
-        if (oddEvenInterval) { stopOddEven(false, false); startOddEven(false); }
-    } else if (data.type === 'pulseBpm') {
-        pulseBpmSlider.value = data.value;
-        pulseBpmValDisplay.textContent = data.value;
-        if (pulseInterval) { stopPulse(false, false); startPulse(false); }
+    } else if (data.type === 'pulseSpeed') {
+        pulseSpeedSlider.value = data.value;
+        pulseSpeedValDisplay.textContent = data.value;
+    } else if (data.type === 'pulseSize') {
+        pulseSizeSlider.value = data.value;
+        pulseSizeValDisplay.textContent = data.value + '%';
     } else if (data.type === 'effect') {
         if (data.effect === 'rainbow') {
             if (data.state === 'start') startRainbow(false);
             else stopRainbow(false, false);
-        } else if (data.effect === 'oddeven') {
-            if (data.state === 'start') startOddEven(false);
-            else stopOddEven(false, false);
         } else if (data.effect === 'pulse') {
             if (data.state === 'start') startPulse(false);
             else stopPulse(false, false);
@@ -797,7 +792,6 @@ function stopRainbow(broadcast = true, restoreState = true) {
 }
 
 function startRainbow(broadcast = true) {
-    stopOddEven(false, false);
     stopPulse(false, false);
     
     if (broadcast) {
@@ -833,95 +827,24 @@ rainbowSpeedSlider.addEventListener('input', () => {
     socket.emit('ui-sync', { type: 'rainbowSpeed', value: rainbowSpeedSlider.value });
 });
 
-// --- ODD/EVEN DIMFLASH ---
-let oddEvenInterval = null;
-let oddEvenPhase = false;
-let oddEvenSnapshot = null; // master dimmer value saved before effect
-const btnOddEven = document.getElementById('btn-oddeven');
-const cardOddEven = document.getElementById('card-oddeven');
-const bpmSlider = document.getElementById('oddeven-bpm');
-const bpmValDisplay = document.getElementById('oddeven-bpm-val');
-
-bpmSlider.addEventListener('input', () => {
-    bpmValDisplay.textContent = bpmSlider.value;
-    if (oddEvenInterval) { stopOddEven(false); startOddEven(); } // Local start emits its own ui-sync anyway so this is fine
-    socket.emit('ui-sync', { type: 'bpm', value: bpmSlider.value });
-});
-
-function stopOddEven(broadcast = true, restoreState = true) {
-    clearInterval(oddEvenInterval);
-    oddEvenInterval = null;
-    btnOddEven.textContent = 'START';
-    btnOddEven.classList.remove('running');
-    cardOddEven.classList.remove('active');
-
-    if (broadcast) {
-        socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'stop' });
-    }
-
-    // Restore all fixtures to their pre-effect state (Master and Color)
-    if (restoreState && oddEvenSnapshot !== null) {
-        const { r, g, b, master } = oddEvenSnapshot;
-        const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
-        for (let i = 0; i < TOTAL_FIXTURES; i++) {
-            const startCh = 50 + (i * 8);
-            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
-        }
-        oddEvenSnapshot = null;
-    }
-}
-
-function startOddEven(broadcast = true) {
-    stopRainbow(false, false);
-    stopPulse(false, false);
-    
-    if (broadcast) {
-        socket.emit('ui-sync', { type: 'effect', effect: 'oddeven', state: 'start' });
-        // Snapshot current color and master
-        oddEvenSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
-
-        const bpm = parseInt(bpmSlider.value);
-        const intervalMs = (60 / bpm) * 1000;
-        oddEvenInterval = setInterval(() => {
-            oddEvenPhase = !oddEvenPhase;
-            for (let i = 0; i < TOTAL_FIXTURES; i++) {
-                const isOdd = (i % 2 === 0);
-                const dimVal = (isOdd !== oddEvenPhase) ? state.rgb.master : 0;
-                const startCh = 50 + (i * 8);
-                // Send both dimmer AND color to be safe
-                socket.emit('update-channel', { channel: startCh,     value: dimVal, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 1, value: state.rgb.r, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 2, value: state.rgb.g, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 3, value: state.rgb.b, fadeTime: 0 });
-            }
-        }, intervalMs);
-    }
-    
-    btnOddEven.textContent = 'STOP';
-    btnOddEven.classList.add('running');
-    cardOddEven.classList.add('active');
-}
-
-btnOddEven.addEventListener('click', () => {
-    if (oddEvenInterval || btnOddEven.classList.contains('running')) stopOddEven();
-    else startOddEven();
-});
-
 // --- ODD/EVEN PULSE (smooth fade) ---
 let pulseInterval = null;
-let pulsePhase = 0; // 0..1 continuous
+let pulsePhase = 0;
 let pulseSnapshot = null;
 const btnPulse = document.getElementById('btn-oddeven-pulse');
 const cardPulse = document.getElementById('card-oddeven-pulse');
-const pulseBpmSlider = document.getElementById('pulse-bpm');
-const pulseBpmValDisplay = document.getElementById('pulse-bpm-val');
+const pulseSpeedSlider = document.getElementById('pulse-speed');
+const pulseSpeedValDisplay = document.getElementById('pulse-speed-val');
+const pulseSizeSlider = document.getElementById('pulse-size');
+const pulseSizeValDisplay = document.getElementById('pulse-size-val');
 
-pulseBpmSlider.addEventListener('input', () => {
-    pulseBpmValDisplay.textContent = pulseBpmSlider.value;
-    socket.emit('ui-sync', { type: 'pulseBpm', value: pulseBpmSlider.value });
+pulseSpeedSlider.addEventListener('input', () => {
+    pulseSpeedValDisplay.textContent = pulseSpeedSlider.value;
+    socket.emit('ui-sync', { type: 'pulseSpeed', value: pulseSpeedSlider.value });
+});
+pulseSizeSlider.addEventListener('input', () => {
+    pulseSizeValDisplay.textContent = pulseSizeSlider.value + '%';
+    socket.emit('ui-sync', { type: 'pulseSize', value: pulseSizeSlider.value });
 });
 
 function stopPulse(broadcast = true, restoreState = true) {
@@ -950,8 +873,7 @@ function stopPulse(broadcast = true, restoreState = true) {
 }
 
 function startPulse(broadcast = true) {
-    stopRainbow(false);
-    stopOddEven(false, false);
+    stopRainbow(false, false);
 
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'pulse', state: 'start' });
@@ -960,15 +882,18 @@ function startPulse(broadcast = true) {
         pulsePhase = 0;
         const TICK_MS = 40;
         pulseInterval = setInterval(() => {
-            const bpm = parseInt(pulseBpmSlider.value);
+            const bpm = parseInt(pulseSpeedSlider.value);
+            const size = parseInt(pulseSizeSlider.value) / 100;
             const cycleDuration = (60 / bpm) * 1000;
             const step = TICK_MS / cycleDuration;
             pulsePhase = (pulsePhase + step) % 1;
 
-            // Sine wave: 0..1..0 per cycle, smooth crossfade
+            // Sine wave crossfade, size controls depth (0% = no movement, 100% = full swing)
             const sine = (Math.sin(pulsePhase * Math.PI * 2) + 1) / 2;
-            const oddDim = Math.round(sine * state.rgb.master);
-            const evenDim = Math.round((1 - sine) * state.rgb.master);
+            const master = state.rgb.master;
+            const minDim = Math.round(master * (1 - size));
+            const oddDim = Math.round(minDim + (master - minDim) * sine);
+            const evenDim = Math.round(minDim + (master - minDim) * (1 - sine));
 
             for (let i = 0; i < TOTAL_FIXTURES; i++) {
                 const isOdd = (i % 2 === 0);
