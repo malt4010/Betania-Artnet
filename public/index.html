@@ -172,6 +172,24 @@
                             <span id="pulse-size-val" style="font-family:var(--font-mono); font-size:0.75rem; color:var(--accent-color); min-width:36px;">100%</span>
                         </div>
                     </div>
+
+                    <!-- Wave Intensity Effect -->
+                    <div class="effect-card" id="card-wave">
+                        <div class="effect-header">
+                            <span class="effect-name">🌊 WAVE EFFECT</span>
+                            <button class="btn-effect" id="btn-wave">START</button>
+                        </div>
+                        <div class="effect-row">
+                            <label>SPEED</label>
+                            <input type="range" id="wave-speed" min="5" max="120" value="30" class="effect-slider">
+                            <span id="wave-speed-val" style="font-family:var(--font-mono); font-size:0.75rem; color:var(--accent-color); min-width:36px;">30</span>
+                        </div>
+                        <div class="effect-row">
+                            <label>SIZE</label>
+                            <input type="range" id="wave-size" min="0" max="100" value="100" class="effect-slider">
+                            <span id="wave-size-val" style="font-family:var(--font-mono); font-size:0.75rem; color:var(--accent-color); min-width:36px;">100%</span>
+                        </div>
+                    </div>
                 </div>
             </div>
 
@@ -181,6 +199,13 @@
                 <button class="btn-preset green" data-color="#00FF00">GRØN</button>
                 <button class="btn-preset blue" data-color="#0000FF">BLÅ</button>
                 <button class="btn-preset lightblue" data-color="#00B4B4">LYSEBLÅ</button>
+            </div>
+            <div class="presets-row custom-presets-row" id="custom-presets">
+                <div class="custom-slot" data-slot="0"><button class="btn-preset custom empty">+</button></div>
+                <div class="custom-slot" data-slot="1"><button class="btn-preset custom empty">+</button></div>
+                <div class="custom-slot" data-slot="2"><button class="btn-preset custom empty">+</button></div>
+                <div class="custom-slot" data-slot="3"><button class="btn-preset custom empty">+</button></div>
+                <div class="custom-slot" data-slot="4"><button class="btn-preset custom empty">+</button></div>
             </div>
         </section>
 

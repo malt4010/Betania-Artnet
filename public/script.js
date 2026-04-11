@@ -575,6 +575,12 @@ socket.on('ui-sync', (data) => {
         localStorage.setItem('artnetFadeTime', data.value);
     } else if (data.type === 'rainbowSpeed') {
         rainbowSpeedSlider.value = data.value;
+    } else if (data.type === 'waveSpeed') {
+        document.getElementById('wave-speed').value = data.value;
+        document.getElementById('wave-speed-val').textContent = data.value;
+    } else if (data.type === 'waveSize') {
+        document.getElementById('wave-size').value = data.value;
+        document.getElementById('wave-size-val').textContent = data.value + '%';
     } else if (data.type === 'pulseSpeed') {
         pulseSpeedSlider.value = data.value;
         pulseSpeedValDisplay.textContent = data.value;
@@ -588,6 +594,9 @@ socket.on('ui-sync', (data) => {
         } else if (data.effect === 'pulse') {
             if (data.state === 'start') startPulse(false);
             else stopPulse(false, false);
+        } else if (data.effect === 'wave') {
+            if (data.state === 'start') startWave(false);
+            else stopWave(false, false);
         }
     } else if (data.type === 'selectionMode') {
         rgbSelectionMode = data.value;
@@ -659,6 +668,79 @@ document.querySelectorAll('.btn-preset').forEach(btn => {
         }
     });
 });
+
+// Custom color presets
+let customPresets = JSON.parse(localStorage.getItem('artnetCustomPresets') || '[]');
+if (customPresets.length < 5) customPresets = Array.from({ length: 5 }, (_, i) => customPresets[i] || null);
+
+function rgbToHex(r, g, b) {
+    return '#' + [r, g, b].map(v => v.toString(16).padStart(2, '0')).join('');
+}
+
+function colorName(r, g, b) {
+    const names = [
+        [255,255,255,'Hvid'], [0,0,0,'Sort'],
+        [255,0,0,'Rød'], [0,255,0,'Grøn'], [0,0,255,'Blå'],
+        [255,255,0,'Gul'], [255,0,255,'Magenta'], [0,255,255,'Cyan'],
+        [255,128,0,'Orange'], [255,64,0,'Mørk Orange'],
+        [128,0,0,'Mørkerød'], [0,128,0,'Mørkegrøn'], [0,0,128,'Mørkeblå'],
+        [128,0,128,'Lilla'], [128,128,0,'Oliven'], [0,128,128,'Petroleum'],
+        [255,192,203,'Lyserød'], [255,105,180,'Varm Pink'], [255,20,147,'Pink'],
+        [255,160,122,'Laks'], [255,127,80,'Koral'],
+        [255,200,0,'Guld'], [255,250,150,'Lysegul'],
+        [173,255,47,'Limegrøn'], [144,238,144,'Lysegrøn'], [0,200,0,'Klargrøn'],
+        [0,180,180,'Lyseblå'], [100,149,237,'Kornblomst'], [135,206,235,'Himmelblå'],
+        [70,130,180,'Stålblå'], [0,100,200,'Mellemblå'],
+        [138,43,226,'Violet'], [75,0,130,'Indigo'], [186,85,211,'Orchidé'],
+        [220,20,60,'Kirsebær'], [178,34,34,'Mursten'],
+        [255,222,173,'Fersken'], [245,222,179,'Hvede'], [210,180,140,'Beige'],
+        [192,192,192,'Sølv'], [128,128,128,'Grå'], [64,64,64,'Mørkegrå'],
+    ];
+    let best = '', bestDist = Infinity;
+    for (const [nr, ng, nb, name] of names) {
+        const d = (r-nr)**2 + (g-ng)**2 + (b-nb)**2;
+        if (d < bestDist) { bestDist = d; best = name; }
+    }
+    return best;
+}
+
+function renderCustomPresets() {
+    const slots = document.querySelectorAll('.custom-slot');
+    slots.forEach((slot, i) => {
+        const preset = customPresets[i];
+        if (preset) {
+            slot.innerHTML = `
+                <button class="btn-preset custom" data-color="${preset.hex}" style="border-bottom: 3px solid ${preset.hex}; background: ${preset.hex}22;">${preset.name}</button>
+                <button class="btn-delete-custom">&times;</button>
+            `;
+            slot.querySelector('.btn-preset').addEventListener('click', () => {
+                colorPicker.color.set(preset.hex);
+                rgbMaster.value = 255;
+                state.rgb.master = 255;
+                rgbMaster.nextElementSibling.textContent = '100%';
+                rgbMaster.nextElementSibling.classList.add('active');
+                updateRGBGroup();
+                socket.emit('ui-sync', { type: 'rgbManual', r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master, mode: rgbSelectionMode });
+            });
+            slot.querySelector('.btn-delete-custom').addEventListener('click', (e) => {
+                e.stopPropagation();
+                customPresets[i] = null;
+                localStorage.setItem('artnetCustomPresets', JSON.stringify(customPresets));
+                renderCustomPresets();
+            });
+        } else {
+            slot.innerHTML = `<button class="btn-preset custom empty">+</button>`;
+            slot.querySelector('.btn-preset').addEventListener('click', () => {
+                const hex = rgbToHex(state.rgb.r, state.rgb.g, state.rgb.b);
+                const name = colorName(state.rgb.r, state.rgb.g, state.rgb.b);
+                customPresets[i] = { hex, name };
+                localStorage.setItem('artnetCustomPresets', JSON.stringify(customPresets));
+                renderCustomPresets();
+            });
+        }
+    });
+}
+renderCustomPresets();
 
 function allOff() {
     allDimmersOff();
@@ -819,6 +901,7 @@ function stopRainbow(broadcast = true, restoreState = true) {
 
 function startRainbow(broadcast = true) {
     stopPulse(false, false);
+    stopWave(false, false);
     
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'rainbow', state: 'start' });
@@ -900,6 +983,7 @@ function stopPulse(broadcast = true, restoreState = true) {
 
 function startPulse(broadcast = true) {
     stopRainbow(false, false);
+    stopWave(false, false);
 
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'pulse', state: 'start' });
@@ -941,4 +1025,94 @@ function startPulse(broadcast = true) {
 btnPulse.addEventListener('click', () => {
     if (pulseInterval || btnPulse.classList.contains('running')) stopPulse();
     else startPulse();
+});
+
+// --- WAVE INTENSITY ---
+let waveInterval = null;
+let wavePhase = 0;
+let waveSnapshot = null;
+const btnWave = document.getElementById('btn-wave');
+const cardWave = document.getElementById('card-wave');
+const waveSpeedSlider = document.getElementById('wave-speed');
+const waveSpeedValDisplay = document.getElementById('wave-speed-val');
+const waveSizeSlider = document.getElementById('wave-size');
+const waveSizeValDisplay = document.getElementById('wave-size-val');
+
+waveSpeedSlider.addEventListener('input', () => {
+    waveSpeedValDisplay.textContent = waveSpeedSlider.value;
+    socket.emit('ui-sync', { type: 'waveSpeed', value: waveSpeedSlider.value });
+});
+waveSizeSlider.addEventListener('input', () => {
+    waveSizeValDisplay.textContent = waveSizeSlider.value + '%';
+    socket.emit('ui-sync', { type: 'waveSize', value: waveSizeSlider.value });
+});
+
+function stopWave(broadcast = true, restoreState = true) {
+    clearInterval(waveInterval);
+    waveInterval = null;
+    btnWave.textContent = 'START';
+    btnWave.classList.remove('running');
+    cardWave.classList.remove('active');
+
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'wave', state: 'stop' });
+    }
+
+    if (restoreState && waveSnapshot !== null) {
+        const { r, g, b, master } = waveSnapshot;
+        const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
+        for (let i = 0; i < TOTAL_FIXTURES; i++) {
+            const startCh = 50 + (i * 8);
+            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
+            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
+        }
+        waveSnapshot = null;
+    }
+}
+
+function startWave(broadcast = true) {
+    stopRainbow(false, false);
+    stopPulse(false, false);
+
+    if (broadcast) {
+        socket.emit('ui-sync', { type: 'effect', effect: 'wave', state: 'start' });
+        waveSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
+
+        wavePhase = 0;
+        const TICK_MS = 40;
+        waveInterval = setInterval(() => {
+            const bpm = parseInt(waveSpeedSlider.value);
+            const size = parseInt(waveSizeSlider.value) / 100;
+            const cycleDuration = (60 / bpm) * 1000;
+            const step = TICK_MS / cycleDuration;
+            wavePhase = (wavePhase + step) % 1;
+
+            const master = state.rgb.master;
+            const minDim = Math.round(master * (1 - size));
+
+            for (let i = 0; i < TOTAL_FIXTURES; i++) {
+                // Each fixture gets a phase offset based on its position
+                const fixturePhase = (wavePhase + (i / TOTAL_FIXTURES)) % 1;
+                const sine = (Math.sin(fixturePhase * Math.PI * 2) + 1) / 2;
+                const dimVal = Math.round(minDim + (master - minDim) * sine);
+
+                const startCh = 50 + (i * 8);
+                socket.emit('update-channel', { channel: startCh,     value: dimVal, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 1, value: state.rgb.r, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 2, value: state.rgb.g, fadeTime: 0 });
+                socket.emit('update-channel', { channel: startCh + 3, value: state.rgb.b, fadeTime: 0 });
+            }
+        }, TICK_MS);
+    }
+
+    btnWave.textContent = 'STOP';
+    btnWave.classList.add('running');
+    cardWave.classList.add('active');
+}
+
+btnWave.addEventListener('click', () => {
+    if (waveInterval || btnWave.classList.contains('running')) stopWave();
+    else startWave();
 });
