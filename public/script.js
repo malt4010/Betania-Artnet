@@ -535,7 +535,8 @@ socket.on('ui-sync', (data) => {
         if (data.value > 0) frontMasterSlider.nextElementSibling.classList.add('active');
         else frontMasterSlider.nextElementSibling.classList.remove('active');
     } else if (data.type === 'fadeTime') {
-        masterFadeInput.value = data.value;
+        globalFadeInput.value = data.value;
+        updateFadeDisplay();
         localStorage.setItem('artnetFadeTime', data.value);
     } else if (data.type === 'rainbowSpeed') {
         rainbowSpeedSlider.value = data.value;
@@ -663,13 +664,33 @@ updateStatusUI();
 
 // Restore local preferences
 const globalFadeInput = document.getElementById('master-fade-time');
+const fadeDisplay = document.getElementById('fade-display');
+const fadeUpBtn = document.getElementById('fade-up');
+const fadeDownBtn = document.getElementById('fade-down');
+
+function updateFadeDisplay() {
+    const val = parseFloat(globalFadeInput.value) || 0;
+    fadeDisplay.innerHTML = val.toFixed(1) + '<small>s</small>';
+}
+
+function setFadeValue(val) {
+    val = Math.max(0, Math.round(val * 10) / 10);
+    globalFadeInput.value = val.toFixed(1);
+    updateFadeDisplay();
+    localStorage.setItem('artnetFadeTime', globalFadeInput.value);
+    socket.emit('ui-sync', { type: 'fadeTime', value: globalFadeInput.value });
+}
+
 if (globalFadeInput) {
     const savedFade = localStorage.getItem('artnetFadeTime');
     if (savedFade) globalFadeInput.value = savedFade;
-    
-    globalFadeInput.addEventListener('change', () => {
-        localStorage.setItem('artnetFadeTime', globalFadeInput.value);
-        socket.emit('ui-sync', { type: 'fadeTime', value: globalFadeInput.value });
+    updateFadeDisplay();
+
+    fadeUpBtn.addEventListener('click', () => {
+        setFadeValue(parseFloat(globalFadeInput.value) + 0.5);
+    });
+    fadeDownBtn.addEventListener('click', () => {
+        setFadeValue(parseFloat(globalFadeInput.value) - 0.5);
     });
 }
 
