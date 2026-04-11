@@ -584,19 +584,10 @@ socket.on('ui-sync', (data) => {
     } else if (data.type === 'waveSize') {
         document.getElementById('wave-size').value = data.value;
         document.getElementById('wave-size-val').textContent = data.value + '%';
-    } else if (data.type === 'pulseSpeed') {
-        pulseSpeedSlider.value = data.value;
-        pulseSpeedValDisplay.textContent = data.value;
-    } else if (data.type === 'pulseSize') {
-        pulseSizeSlider.value = data.value;
-        pulseSizeValDisplay.textContent = data.value + '%';
     } else if (data.type === 'effect') {
         if (data.effect === 'rainbow') {
             if (data.state === 'start') startRainbow(false);
             else stopRainbow(false, false);
-        } else if (data.effect === 'pulse') {
-            if (data.state === 'start') startPulse(false);
-            else stopPulse(false, false);
         } else if (data.effect === 'wave') {
             if (data.state === 'start') startWave(false);
             else stopWave(false, false);
@@ -903,7 +894,6 @@ function stopRainbow(broadcast = true, restoreState = true) {
 }
 
 function startRainbow(broadcast = true) {
-    stopPulse(false, false);
     stopWave(false, false);
     
     if (broadcast) {
@@ -939,98 +929,7 @@ rainbowSpeedSlider.addEventListener('input', () => {
     socket.emit('ui-sync', { type: 'rainbowSpeed', value: rainbowSpeedSlider.value });
 });
 
-// --- ODD/EVEN PULSE (smooth fade) ---
-let pulseInterval = null;
-let pulsePhase = 0;
-let pulseSnapshot = null;
-const btnPulse = document.getElementById('btn-oddeven-pulse');
-const cardPulse = document.getElementById('card-oddeven-pulse');
-const pulseSpeedSlider = document.getElementById('pulse-speed');
-const pulseSpeedValDisplay = document.getElementById('pulse-speed-val');
-const pulseSizeSlider = document.getElementById('pulse-size');
-const pulseSizeValDisplay = document.getElementById('pulse-size-val');
-
-pulseSpeedSlider.addEventListener('input', () => {
-    pulseSpeedValDisplay.textContent = pulseSpeedSlider.value;
-    socket.emit('ui-sync', { type: 'pulseSpeed', value: pulseSpeedSlider.value });
-});
-pulseSizeSlider.addEventListener('input', () => {
-    pulseSizeValDisplay.textContent = pulseSizeSlider.value + '%';
-    socket.emit('ui-sync', { type: 'pulseSize', value: pulseSizeSlider.value });
-});
-
-function stopPulse(broadcast = true, restoreState = true) {
-    clearInterval(pulseInterval);
-    pulseInterval = null;
-    btnPulse.textContent = 'START';
-    btnPulse.classList.remove('running');
-    cardPulse.classList.remove('active');
-
-    if (broadcast) {
-        socket.emit('ui-sync', { type: 'effect', effect: 'pulse', state: 'stop' });
-    }
-
-    if (restoreState && pulseSnapshot !== null) {
-        const { r, g, b, master } = pulseSnapshot;
-        const fadeTime = (parseFloat(masterFadeInput.value) || 0) * 1000;
-        for (let i = 0; i < TOTAL_FIXTURES; i++) {
-            const startCh = 50 + (i * 8);
-            socket.emit('update-channel', { channel: startCh,     value: master, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 1, value: r, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
-            socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
-        }
-        pulseSnapshot = null;
-    }
-}
-
-function startPulse(broadcast = true) {
-    stopRainbow(false, false);
-    stopWave(false, false);
-
-    if (broadcast) {
-        socket.emit('ui-sync', { type: 'effect', effect: 'pulse', state: 'start' });
-        pulseSnapshot = { r: state.rgb.r, g: state.rgb.g, b: state.rgb.b, master: state.rgb.master };
-
-        pulsePhase = 0;
-        const TICK_MS = 40;
-        pulseInterval = setInterval(() => {
-            const bpm = parseInt(pulseSpeedSlider.value);
-            const size = parseInt(pulseSizeSlider.value) / 100;
-            const cycleDuration = (60 / bpm) * 1000;
-            const step = TICK_MS / cycleDuration;
-            pulsePhase = (pulsePhase + step) % 1;
-
-            // Sine wave crossfade, size controls depth (0% = no movement, 100% = full swing)
-            const sine = (Math.sin(pulsePhase * Math.PI * 2) + 1) / 2;
-            const master = state.rgb.master;
-            const minDim = Math.round(master * (1 - size));
-            const oddDim = Math.round(minDim + (master - minDim) * sine);
-            const evenDim = Math.round(minDim + (master - minDim) * (1 - sine));
-
-            for (let i = 0; i < TOTAL_FIXTURES; i++) {
-                const isOdd = (i % 2 === 0);
-                const dimVal = isOdd ? oddDim : evenDim;
-                const startCh = 50 + (i * 8);
-                socket.emit('update-channel', { channel: startCh,     value: dimVal, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 1, value: state.rgb.r, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 2, value: state.rgb.g, fadeTime: 0 });
-                socket.emit('update-channel', { channel: startCh + 3, value: state.rgb.b, fadeTime: 0 });
-            }
-        }, TICK_MS);
-    }
-
-    btnPulse.textContent = 'STOP';
-    btnPulse.classList.add('running');
-    cardPulse.classList.add('active');
-}
-
-btnPulse.addEventListener('click', () => {
-    if (pulseInterval || btnPulse.classList.contains('running')) stopPulse();
-    else startPulse();
-});
-
-// --- WAVE INTENSITY ---
+// --- WAVE EFFECT ---
 let waveInterval = null;
 let wavePhase = 0;
 let waveSnapshot = null;
@@ -1089,7 +988,6 @@ function stopWave(broadcast = true, restoreState = true) {
 
 function startWave(broadcast = true) {
     stopRainbow(false, false);
-    stopPulse(false, false);
 
     if (broadcast) {
         socket.emit('ui-sync', { type: 'effect', effect: 'wave', state: 'start' });
