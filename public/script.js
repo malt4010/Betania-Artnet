@@ -728,7 +728,13 @@ function stopRainbow(broadcast = true, restoreState = true) {
             socket.emit('update-channel', { channel: startCh + 2, value: g, fadeTime });
             socket.emit('update-channel', { channel: startCh + 3, value: b, fadeTime });
         }
-        setRGB(r, g, b, false);
+        state.rgb.r = r;
+        state.rgb.g = g;
+        state.rgb.b = b;
+        syncManualSliders();
+        isInternalUpdate = true;
+        colorPicker.color.set({ r, g, b });
+        setTimeout(() => { isInternalUpdate = false; }, 50);
         rainbowSnapshot = null;
     }
 }
