@@ -400,13 +400,12 @@ main { max-width: 1400px; margin: 2rem auto; padding: 0 1.5rem; }
     font-size: 0.65rem; color: #666; font-weight: 600;
 }
 
-.screen-credit {
-    position: fixed; bottom: 8px; right: 12px;
-    font-size: 0.5rem; color: rgba(255,255,255,0.15);
-    font-family: var(--font-mono); letter-spacing: 0.5px;
-    pointer-events: none; z-index: 1;
+.logo-credit {
+    font-size: 0.5rem; color: rgba(255,255,255,0.25);
+    font-family: var(--font-mono); letter-spacing: 0.3px;
+    margin-top: -2px;
 }
-body.light-theme .screen-credit { color: rgba(0,0,0,0.15); }
+body.light-theme .logo-credit { color: rgba(0,0,0,0.25); }
 
 .presets-row {
     display: grid; grid-template-columns: repeat(5, 1fr);
